@@ -101,6 +101,11 @@ impl LoweredWord {
             parts: vec![LoweredWordPart::Literal(s.into())],
         }
     }
+
+    pub fn from_words(text: &str) -> Vec<Self> {
+        text.split_whitespace().map(Self::from_literal).collect()
+    }
+
     pub fn as_literal(&self) -> Option<&str> {
         if self.parts.len() == 1 {
             match &self.parts[0] {
@@ -111,6 +116,25 @@ impl LoweredWord {
             None
         }
     }
+}
+
+impl From<&str> for LoweredWord {
+    fn from(s: &str) -> Self {
+        Self::from_literal(s)
+    }
+}
+
+impl From<String> for LoweredWord {
+    fn from(s: String) -> Self {
+        Self::from_literal(s)
+    }
+}
+
+#[macro_export]
+macro_rules! words {
+    ($($w:expr),* $(,)?) => {
+        vec![$($crate::bash::ir::LoweredWord::from($w)),*]
+    };
 }
 
 #[derive(Debug, Clone, PartialEq)]
