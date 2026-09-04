@@ -1,6 +1,6 @@
 use fish_parser::parse;
-use hook::bash::lowering::lower_program;
 use hook::bash::emitter::emit_bash;
+use hook::bash::lowering::lower_program;
 
 #[test]
 fn test_emit_shebang_rewrite() {

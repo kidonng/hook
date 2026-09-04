@@ -19,8 +19,10 @@
       devTools = pkgs: [
         pkgs.bash
         pkgs.cargo
+        pkgs.clippy
         pkgs.fish
         pkgs.rustc
+        pkgs.rustfmt
       ];
     in
     {

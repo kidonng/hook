@@ -1,7 +1,8 @@
 [package]
 name = "hook"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
 
 [lib]
 name = "hook"

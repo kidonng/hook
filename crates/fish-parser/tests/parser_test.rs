@@ -12,7 +12,10 @@ fn test_parse_shebang_and_simple_command() {
             assert_eq!(p.commands.len(), 1);
             let cmd = &p.commands[0];
             assert_eq!(cmd.args[0].as_single_literal(), Some("echo"));
-            assert_eq!(cmd.args[1].parts, vec![WordPart::SingleQuoted("hello world".to_string())]);
+            assert_eq!(
+                cmd.args[1].parts,
+                vec![WordPart::SingleQuoted("hello world".to_string())]
+            );
         }
         _ => panic!("expected pipeline statement"),
     }
@@ -27,28 +30,40 @@ fn test_parse_variables_and_slices() {
             let args = &p.commands[0].args;
             assert_eq!(args.len(), 5);
             // $status
-            assert_eq!(args[1].parts, vec![WordPart::Variable(VariableRef {
-                name: "status".to_string(),
-                slices: vec![],
-            })]);
+            assert_eq!(
+                args[1].parts,
+                vec![WordPart::Variable(VariableRef {
+                    name: "status".to_string(),
+                    slices: vec![],
+                })]
+            );
             // $argv[1]
-            assert_eq!(args[2].parts, vec![WordPart::Variable(VariableRef {
-                name: "argv".to_string(),
-                slices: vec![Slice::Index(SliceIndex::Pos(1))],
-            })]);
+            assert_eq!(
+                args[2].parts,
+                vec![WordPart::Variable(VariableRef {
+                    name: "argv".to_string(),
+                    slices: vec![Slice::Index(SliceIndex::Pos(1))],
+                })]
+            );
             // $var[1..3]
-            assert_eq!(args[3].parts, vec![WordPart::Variable(VariableRef {
-                name: "var".to_string(),
-                slices: vec![Slice::Range {
-                    start: Some(SliceIndex::Pos(1)),
-                    end: Some(SliceIndex::Pos(3)),
-                }],
-            })]);
+            assert_eq!(
+                args[3].parts,
+                vec![WordPart::Variable(VariableRef {
+                    name: "var".to_string(),
+                    slices: vec![Slice::Range {
+                        start: Some(SliceIndex::Pos(1)),
+                        end: Some(SliceIndex::Pos(3)),
+                    }],
+                })]
+            );
             // $var[-1]
-            assert_eq!(args[4].parts, vec![WordPart::Variable(VariableRef {
-                name: "var".to_string(),
-                slices: vec![Slice::Index(SliceIndex::Neg(1))],
-            })]);
+            assert_eq!(
+                args[4].parts,
+                vec![WordPart::Variable(VariableRef {
+                    name: "var".to_string(),
+                    slices: vec![Slice::Index(SliceIndex::Neg(1))],
+                })]
+            );
         }
         _ => panic!("expected pipeline"),
     }

@@ -376,22 +376,22 @@ fn emit_variable_ref_inner(v: &LoweredVariableRef, out: &mut String) {
             }
         }
         LoweredVariableRef::ArgvLast => out.push_str("${@: -1:1}"),
-        LoweredVariableRef::Custom { name, subscript } => {
-            match subscript {
-                None => out.push_str(&format!("${}", name)),
-                Some(BashSubscript::All) => out.push_str(&format!("${{{}[@]}}", name)),
-                Some(BashSubscript::ZeroBasedIndex(idx)) => out.push_str(&format!("${{{}[{}]}}", name, idx)),
-                Some(BashSubscript::NegativeOffsetFromLength(k)) => {
-                    out.push_str(&format!("${{{}[$((${{#{}[@]}}-{}))]}}", name, name, k));
-                }
-                Some(BashSubscript::Range { offset, length }) => {
-                    out.push_str(&format!("${{{}[@]:{}:{}}}", name, offset, length));
-                }
-                Some(BashSubscript::OpenRange { offset }) => {
-                    out.push_str(&format!("${{{}[@]:{}}}", name, offset));
-                }
+        LoweredVariableRef::Custom { name, subscript } => match subscript {
+            None => out.push_str(&format!("${}", name)),
+            Some(BashSubscript::All) => out.push_str(&format!("${{{}[@]}}", name)),
+            Some(BashSubscript::ZeroBasedIndex(idx)) => {
+                out.push_str(&format!("${{{}[{}]}}", name, idx))
             }
-        }
+            Some(BashSubscript::NegativeOffsetFromLength(k)) => {
+                out.push_str(&format!("${{{}[$((${{#{}[@]}}-{}))]}}", name, name, k));
+            }
+            Some(BashSubscript::Range { offset, length }) => {
+                out.push_str(&format!("${{{}[@]:{}:{}}}", name, offset, length));
+            }
+            Some(BashSubscript::OpenRange { offset }) => {
+                out.push_str(&format!("${{{}[@]:{}}}", name, offset));
+            }
+        },
     }
 }
 
@@ -413,7 +413,9 @@ pub fn emit_variable_ref(v: &LoweredVariableRef, out: &mut String) {
             match subscript {
                 None => out.push_str(&format!("\"${}\"", name)),
                 Some(BashSubscript::All) => out.push_str(&format!("\"${{{}[@]}}\"", name)),
-                Some(BashSubscript::ZeroBasedIndex(idx)) => out.push_str(&format!("\"${{{}[{}]}}\"", name, idx)),
+                Some(BashSubscript::ZeroBasedIndex(idx)) => {
+                    out.push_str(&format!("\"${{{}[{}]}}\"", name, idx))
+                }
                 Some(BashSubscript::NegativeOffsetFromLength(k)) => {
                     // Bash 3.2 safe dynamic array length arithmetic
                     out.push_str(&format!("\"${{{}[$((${{#{}[@]}}-{}))]}}\"", name, name, k));

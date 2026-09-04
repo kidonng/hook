@@ -1,5 +1,5 @@
-use std::process::{Command, Stdio};
 use std::io::Write;
+use std::process::{Command, Stdio};
 
 #[test]
 fn test_cli_stdin_pipe() {
@@ -12,7 +12,9 @@ fn test_cli_stdin_pipe() {
 
     {
         let stdin = child.stdin.as_mut().expect("failed to open stdin");
-        stdin.write_all(b"echo hello\n").expect("failed to write to stdin");
+        stdin
+            .write_all(b"echo hello\n")
+            .expect("failed to write to stdin");
     }
 
     let output = child.wait_with_output().expect("failed to read output");
@@ -32,7 +34,9 @@ fn test_cli_syntax_error() {
 
     {
         let stdin = child.stdin.as_mut().expect("failed to open stdin");
-        stdin.write_all(b"if ; echo\n").expect("failed to write to stdin");
+        stdin
+            .write_all(b"if ; echo\n")
+            .expect("failed to write to stdin");
     }
 
     let output = child.wait_with_output().expect("failed to read output");

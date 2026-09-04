@@ -1,5 +1,5 @@
-use fish_parser::ast::*;
 use super::ir::*;
+use fish_parser::ast::*;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Scope {
@@ -41,20 +41,28 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
         Statement::If(i) => LoweredStatement::If(LoweredIf {
             condition: lower_pipeline(&i.condition, scope),
             then_body: lower_statements(&i.then_body, scope),
-            elif_branches: i.elif_branches.iter().map(|(p, b)| (lower_pipeline(p, scope), lower_statements(b, scope))).collect(),
+            elif_branches: i
+                .elif_branches
+                .iter()
+                .map(|(p, b)| (lower_pipeline(p, scope), lower_statements(b, scope)))
+                .collect(),
             else_body: i.else_body.as_ref().map(|b| lower_statements(b, scope)),
         }),
         Statement::Switch(s) => LoweredStatement::Switch(LoweredSwitch {
             value: lower_word(&s.value, scope),
-            cases: s.cases.iter().map(|c| LoweredCaseClause {
-                patterns: c.patterns.iter().map(|w| lower_word(w, scope)).collect(),
-                body: lower_statements(&c.body, scope),
-            }).collect(),
+            cases: s
+                .cases
+                .iter()
+                .map(|c| LoweredCaseClause {
+                    patterns: c.patterns.iter().map(|w| lower_word(w, scope)).collect(),
+                    body: lower_statements(&c.body, scope),
+                })
+                .collect(),
         }),
         Statement::For(f) => {
             let mut val_scope = *scope;
             val_scope.in_for_values = true;
-            let values = f.values.iter().map(|w| lower_word(w, &mut val_scope)).collect();
+            let values = f.values.iter().map(|w| lower_word(w, &val_scope)).collect();
             LoweredStatement::For(LoweredFor {
                 variable: f.variable.clone(),
                 values,
@@ -77,7 +85,11 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
         }
         Statement::BeginBlock(b) => LoweredStatement::BeginBlock(LoweredBeginBlock {
             body: lower_statements(&b.body, scope),
-            redirections: b.redirections.iter().map(|r| lower_redirection(r, scope)).collect(),
+            redirections: b
+                .redirections
+                .iter()
+                .map(|r| lower_redirection(r, scope))
+                .collect(),
         }),
     }
 }
@@ -92,8 +104,7 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
     let mut var_name = None;
     let mut values = Vec::new();
 
-    let mut iter = cmd.args.iter().skip(1).peekable();
-    while let Some(arg) = iter.next() {
+    for arg in cmd.args.iter().skip(1) {
         if let Some(lit) = arg.as_single_literal() {
             if lit.starts_with('-') && var_name.is_none() {
                 match lit {
@@ -103,7 +114,7 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
                     "-a" | "--append" => is_append = true,
                     "-p" | "--prepend" => is_prepend = true,
                     "-e" | "--erase" => is_erase = true,
-                    "-g" | "--global" => {},
+                    "-g" | "--global" => {}
                     _ => {}
                 }
                 continue;
@@ -152,7 +163,11 @@ pub fn lower_command(c: &Command, scope: &Scope) -> LoweredCommand {
     LoweredCommand {
         negate: c.negate,
         args: c.args.iter().map(|w| lower_word(w, scope)).collect(),
-        redirections: c.redirections.iter().map(|r| lower_redirection(r, scope)).collect(),
+        redirections: c
+            .redirections
+            .iter()
+            .map(|r| lower_redirection(r, scope))
+            .collect(),
     }
 }
 
@@ -174,21 +189,26 @@ pub fn lower_word_part(part: &WordPart, scope: &Scope) -> LoweredWordPart {
     match part {
         WordPart::Literal(s) => LoweredWordPart::Literal(s.clone()),
         WordPart::SingleQuoted(s) => LoweredWordPart::SingleQuoted(s.clone()),
-        WordPart::DoubleQuoted(parts) => LoweredWordPart::DoubleQuoted(
-            parts.iter().map(|p| lower_word_part(p, scope)).collect()
-        ),
+        WordPart::DoubleQuoted(parts) => {
+            LoweredWordPart::DoubleQuoted(parts.iter().map(|p| lower_word_part(p, scope)).collect())
+        }
         WordPart::Variable(v) => LoweredWordPart::Variable(lower_variable_ref(v)),
         WordPart::CommandSubst(stmts) => {
             // Check for process substitution: single pipeline ending in `psub`
             if stmts.len() == 1 {
                 if let Statement::Pipeline(p) = &stmts[0] {
                     if let Some(last_cmd) = p.commands.last() {
-                        if let Some("psub") = last_cmd.args.first().and_then(|w| w.as_single_literal()) {
+                        if let Some("psub") =
+                            last_cmd.args.first().and_then(|w| w.as_single_literal())
+                        {
                             // Strip terminal psub
                             let mut stripped_pipeline = p.clone();
                             stripped_pipeline.commands.pop();
                             if !stripped_pipeline.commands.is_empty() {
-                                return LoweredWordPart::ProcessSubst(lower_pipeline(&stripped_pipeline, scope));
+                                return LoweredWordPart::ProcessSubst(lower_pipeline(
+                                    &stripped_pipeline,
+                                    scope,
+                                ));
                             }
                         }
                     }
@@ -202,9 +222,9 @@ pub fn lower_word_part(part: &WordPart, scope: &Scope) -> LoweredWordPart {
                 quoted,
             }
         }
-        WordPart::BraceExpansion(words) => LoweredWordPart::BraceExpansion(
-            words.iter().map(|w| lower_word(w, scope)).collect()
-        ),
+        WordPart::BraceExpansion(words) => {
+            LoweredWordPart::BraceExpansion(words.iter().map(|w| lower_word(w, scope)).collect())
+        }
     }
 }
 
@@ -223,14 +243,32 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
             match &v.slices[0] {
                 Slice::Index(SliceIndex::Pos(idx)) => return LoweredVariableRef::ArgvIndex(*idx),
                 Slice::Index(SliceIndex::Neg(1)) => return LoweredVariableRef::ArgvLast,
-                Slice::Range { start: Some(SliceIndex::Pos(s)), end: None } => {
-                    return LoweredVariableRef::ArgvSlice { start: *s, len: None };
+                Slice::Range {
+                    start: Some(SliceIndex::Pos(s)),
+                    end: None,
+                } => {
+                    return LoweredVariableRef::ArgvSlice {
+                        start: *s,
+                        len: None,
+                    };
                 }
-                Slice::Range { start: Some(SliceIndex::Pos(s)), end: Some(SliceIndex::Neg(1)) } => {
-                    return LoweredVariableRef::ArgvSlice { start: *s, len: None };
+                Slice::Range {
+                    start: Some(SliceIndex::Pos(s)),
+                    end: Some(SliceIndex::Neg(1)),
+                } => {
+                    return LoweredVariableRef::ArgvSlice {
+                        start: *s,
+                        len: None,
+                    };
                 }
-                Slice::Range { start: Some(SliceIndex::Pos(s)), end: Some(SliceIndex::Pos(e)) } if e >= s => {
-                    return LoweredVariableRef::ArgvSlice { start: *s, len: Some(e - s + 1) };
+                Slice::Range {
+                    start: Some(SliceIndex::Pos(s)),
+                    end: Some(SliceIndex::Pos(e)),
+                } if e >= s => {
+                    return LoweredVariableRef::ArgvSlice {
+                        start: *s,
+                        len: Some(e - s + 1),
+                    };
                 }
                 _ => {}
             }
@@ -246,15 +284,19 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
                 let zero_based = if *n > 0 { n - 1 } else { 0 };
                 Some(BashSubscript::ZeroBasedIndex(zero_based))
             }
-            Slice::Index(SliceIndex::Neg(k)) => {
-                Some(BashSubscript::NegativeOffsetFromLength(*k))
-            }
-            Slice::Range { start: Some(SliceIndex::Pos(s)), end: Some(SliceIndex::Pos(e)) } if e >= s => {
+            Slice::Index(SliceIndex::Neg(k)) => Some(BashSubscript::NegativeOffsetFromLength(*k)),
+            Slice::Range {
+                start: Some(SliceIndex::Pos(s)),
+                end: Some(SliceIndex::Pos(e)),
+            } if e >= s => {
                 let offset = if *s > 0 { s - 1 } else { 0 };
                 let length = e - s + 1;
                 Some(BashSubscript::Range { offset, length })
             }
-            Slice::Range { start: Some(SliceIndex::Pos(s)), end: None } => {
+            Slice::Range {
+                start: Some(SliceIndex::Pos(s)),
+                end: None,
+            } => {
                 let offset = if *s > 0 { s - 1 } else { 0 };
                 Some(BashSubscript::OpenRange { offset })
             }

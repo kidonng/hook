@@ -1,8 +1,8 @@
-use std::process::{Command, Stdio};
-use std::io::Write;
 use fish_parser::parse;
-use hook::bash::lowering::lower_program;
 use hook::bash::emitter::emit_bash;
+use hook::bash::lowering::lower_program;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 fn transpile(fish_code: &str) -> String {
     let parsed = parse(fish_code).expect("failed to parse fish code");
@@ -20,13 +20,18 @@ fn transpile(fish_code: &str) -> String {
 
     {
         let stdin = child.stdin.as_mut().expect("failed to get stdin");
-        stdin.write_all(bash_code.as_bytes()).expect("failed to write to bash stdin");
+        stdin
+            .write_all(bash_code.as_bytes())
+            .expect("failed to write to bash stdin");
     }
 
     let output = child.wait_with_output().expect("failed to wait on bash");
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        panic!("bash -n syntax validation failed for output:\n{}\nError:\n{}", bash_code, stderr);
+        panic!(
+            "bash -n syntax validation failed for output:\n{}\nError:\n{}",
+            bash_code, stderr
+        );
     }
 
     bash_code

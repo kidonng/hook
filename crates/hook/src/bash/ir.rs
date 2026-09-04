@@ -24,12 +24,29 @@ pub enum LoweredStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AssignmentIR {
-    Local { name: String, values: Vec<LoweredWord> },
-    Export { name: String, values: Vec<LoweredWord> },
-    Global { name: String, values: Vec<LoweredWord> },
-    Append { name: String, values: Vec<LoweredWord> },
-    Prepend { name: String, values: Vec<LoweredWord> },
-    Erase { name: String },
+    Local {
+        name: String,
+        values: Vec<LoweredWord>,
+    },
+    Export {
+        name: String,
+        values: Vec<LoweredWord>,
+    },
+    Global {
+        name: String,
+        values: Vec<LoweredWord>,
+    },
+    Append {
+        name: String,
+        values: Vec<LoweredWord>,
+    },
+    Prepend {
+        name: String,
+        values: Vec<LoweredWord>,
+    },
+    Erase {
+        name: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,20 +87,29 @@ pub enum LoweredWordPart {
     SingleQuoted(String),
     DoubleQuoted(Vec<LoweredWordPart>),
     Variable(LoweredVariableRef),
-    CommandSubst { stmts: Vec<LoweredStatement>, quoted: bool },
+    CommandSubst {
+        stmts: Vec<LoweredStatement>,
+        quoted: bool,
+    },
     ProcessSubst(LoweredPipeline),
     BraceExpansion(Vec<LoweredWord>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoweredVariableRef {
-    Status,                                         // $status -> $?
-    Pipestatus,                                     // $pipestatus -> ${PIPESTATUS[@]}
-    ArgvAll,                                        // $argv -> "$@"
-    ArgvIndex(usize),                               // $argv[1] -> $1
-    ArgvSlice { start: usize, len: Option<usize> }, // $argv[2..-1] -> ${@:2}
-    ArgvLast,                                       // $argv[-1] -> ${@: -1:1}
-    Custom { name: String, subscript: Option<BashSubscript> },
+    Status,           // $status -> $?
+    Pipestatus,       // $pipestatus -> ${PIPESTATUS[@]}
+    ArgvAll,          // $argv -> "$@"
+    ArgvIndex(usize), // $argv[1] -> $1
+    ArgvSlice {
+        start: usize,
+        len: Option<usize>,
+    }, // $argv[2..-1] -> ${@:2}
+    ArgvLast,         // $argv[-1] -> ${@: -1:1}
+    Custom {
+        name: String,
+        subscript: Option<BashSubscript>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

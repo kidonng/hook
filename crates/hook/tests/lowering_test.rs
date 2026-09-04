@@ -1,6 +1,6 @@
 use fish_parser::parse;
-use hook::bash::lowering::lower_program;
 use hook::bash::ir::*;
+use hook::bash::lowering::lower_program;
 
 #[test]
 fn test_lower_set_scope_defense() {
@@ -24,14 +24,12 @@ fn test_lower_set_in_function() {
     let prog = parse(input).unwrap();
     let lowered = lower_program(&prog);
     match &lowered.statements[0] {
-        LoweredStatement::Function(f) => {
-            match &f.body[0] {
-                LoweredStatement::Assignment(AssignmentIR::Local { name, .. }) => {
-                    assert_eq!(name, "foo");
-                }
-                _ => panic!("expected Local assignment inside function"),
+        LoweredStatement::Function(f) => match &f.body[0] {
+            LoweredStatement::Assignment(AssignmentIR::Local { name, .. }) => {
+                assert_eq!(name, "foo");
             }
-        }
+            _ => panic!("expected Local assignment inside function"),
+        },
         _ => panic!("expected function"),
     }
 }
@@ -65,16 +63,40 @@ fn test_lower_builtin_vars_and_slices() {
         LoweredStatement::Pipeline(p) => {
             let args = &p.commands[0].args;
             assert_eq!(args.len(), 8);
-            assert_eq!(args[1].parts[0], LoweredWordPart::Variable(LoweredVariableRef::Status));
-            assert_eq!(args[2].parts[0], LoweredWordPart::Variable(LoweredVariableRef::Pipestatus));
-            assert_eq!(args[3].parts[0], LoweredWordPart::Variable(LoweredVariableRef::ArgvAll));
-            assert_eq!(args[4].parts[0], LoweredWordPart::Variable(LoweredVariableRef::ArgvIndex(1)));
-            assert_eq!(args[5].parts[0], LoweredWordPart::Variable(LoweredVariableRef::ArgvSlice { start: 2, len: None }));
-            assert_eq!(args[6].parts[0], LoweredWordPart::Variable(LoweredVariableRef::ArgvLast));
-            assert_eq!(args[7].parts[0], LoweredWordPart::Variable(LoweredVariableRef::Custom {
-                name: "var".to_string(),
-                subscript: Some(BashSubscript::NegativeOffsetFromLength(1)),
-            }));
+            assert_eq!(
+                args[1].parts[0],
+                LoweredWordPart::Variable(LoweredVariableRef::Status)
+            );
+            assert_eq!(
+                args[2].parts[0],
+                LoweredWordPart::Variable(LoweredVariableRef::Pipestatus)
+            );
+            assert_eq!(
+                args[3].parts[0],
+                LoweredWordPart::Variable(LoweredVariableRef::ArgvAll)
+            );
+            assert_eq!(
+                args[4].parts[0],
+                LoweredWordPart::Variable(LoweredVariableRef::ArgvIndex(1))
+            );
+            assert_eq!(
+                args[5].parts[0],
+                LoweredWordPart::Variable(LoweredVariableRef::ArgvSlice {
+                    start: 2,
+                    len: None
+                })
+            );
+            assert_eq!(
+                args[6].parts[0],
+                LoweredWordPart::Variable(LoweredVariableRef::ArgvLast)
+            );
+            assert_eq!(
+                args[7].parts[0],
+                LoweredWordPart::Variable(LoweredVariableRef::Custom {
+                    name: "var".to_string(),
+                    subscript: Some(BashSubscript::NegativeOffsetFromLength(1)),
+                })
+            );
         }
         _ => panic!("expected pipeline"),
     }

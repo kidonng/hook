@@ -1,7 +1,8 @@
 [package]
 name = "fish-parser"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 serde = { workspace = true }
@@ -9,4 +10,4 @@ peg = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
-serde_json = "1.0"
+serde_json = { workspace = true }

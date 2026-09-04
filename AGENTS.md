@@ -13,8 +13,8 @@
 
 ### Prerequisites
 
-- **Rust**: 1.80+ (2021 edition)
-- **Nix**: Flake support enabled with `nix develop` providing a hermetic toolchain (`rustc`, `cargo`, `bash`, `fish`).
+- **Rust**: 1.85+ (2024 edition)
+- **Nix**: Flake support enabled with `nix develop` providing a hermetic toolchain (`rustc`, `cargo`, `clippy`, `rustfmt`, `bash`, `fish`).
 - **Bash**: Bash 3.2+ for running integration test validations.
 
 ### Common Commands
@@ -30,6 +30,10 @@ cargo build --release
 # Run all workspace unit and integration tests
 cargo test
 
+
+# Format and lint code
+cargo fmt --check
+cargo clippy
 # Build with Nix Flake
 nix build
 
