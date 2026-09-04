@@ -224,3 +224,18 @@ fn test_parse_double_quoted_command_substitution_rules() {
         panic!("expected pipeline");
     }
 }
+
+#[test]
+fn test_parse_merged_pipes() {
+    for input in &["make &| less\n", "make |& less\n"] {
+        let program = parse(input).unwrap();
+        assert_eq!(program.statements.len(), 1);
+        if let Statement::Pipeline(pipe) = &program.statements[0] {
+            assert_eq!(pipe.commands.len(), 2);
+            let cmd1 = &pipe.commands[0];
+            assert!(cmd1.redirections.iter().any(|r| r.fd == Some(2) && r.mode == RedirectMode::DupOutput));
+        } else {
+            panic!("expected pipeline");
+        }
+    }
+}

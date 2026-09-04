@@ -186,3 +186,12 @@ fn test_transpile_double_quoted_parens_literal() {
     let bash = transpile("echo \"(pwd)\"\necho \"$(pwd)\"\n");
     assert_eq!(bash, "echo \"(pwd)\"\necho \"$(pwd)\"\n");
 }
+
+#[test]
+fn test_transpile_merged_pipes() {
+    let bash1 = transpile("make &| less\n");
+    assert_eq!(bash1, "make 2>&1 | less\n");
+
+    let bash2 = transpile("make |& less\n");
+    assert_eq!(bash2, "make 2>&1 | less\n");
+}

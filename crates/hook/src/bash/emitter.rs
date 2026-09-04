@@ -338,15 +338,29 @@ fn emit_redirection(r: &LoweredRedirection, out: &mut String) {
         out.push_str(&fd.to_string());
     }
     match r.mode {
-        RedirectMode::Output => out.push('>'),
-        RedirectMode::Append => out.push_str(">>"),
-        RedirectMode::Input => out.push('<'),
-        RedirectMode::OutputAndErr => out.push('>'), // Bash 3.2: > target 2>&1
-        RedirectMode::AppendAndErr => out.push_str(">>"),
+        RedirectMode::Output => {
+            out.push('>');
+            out.push(' ');
+        }
+        RedirectMode::Append => {
+            out.push_str(">>");
+            out.push(' ');
+        }
+        RedirectMode::Input => {
+            out.push('<');
+            out.push(' ');
+        }
+        RedirectMode::OutputAndErr => {
+            out.push('>');
+            out.push(' ');
+        }
+        RedirectMode::AppendAndErr => {
+            out.push_str(">>");
+            out.push(' ');
+        }
         RedirectMode::DupOutput => out.push_str(">&"),
         RedirectMode::DupInput => out.push_str("<&"),
     }
-    out.push(' ');
     emit_word(&r.target, out);
     if r.mode == RedirectMode::OutputAndErr || r.mode == RedirectMode::AppendAndErr {
         out.push_str(" 2>&1");

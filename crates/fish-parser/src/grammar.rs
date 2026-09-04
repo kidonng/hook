@@ -100,13 +100,31 @@ peg::parser! {
         rule cont_space()
             = (_ / ("\\" "\n") / ("#" [^'\n']* "\n") / "\n")*
 
-        rule pipe_sep()
-            = _* "|" cont_space()
+        rule pipe_op() -> bool
+            = ("&|" / "|&") { true }
+            / "|" { false }
+
+        rule pipe_sep() -> bool
+            = _* p:pipe_op() cont_space() { p }
+
         rule negate() -> bool
             = ("not" !keyword_char() _+ / "!" _*) { true }
+
         rule pipeline() -> Pipeline
-            = !reserved_keyword() comb:combinator_prefix()? _* negate:negate()? cmds:(command() ++ pipe_sep()) bg:(_* "&" !['&' | '>'])? {
-                let mut commands = cmds;
+            = !reserved_keyword() comb:combinator_prefix()? _* negate:negate()? head:command() tail:(sep:pipe_sep() cmd:command() { (sep, cmd) })* bg:(_* "&" !['&' | '>'])? {
+                let mut commands = vec![head];
+                for (is_merged, next_cmd) in tail {
+                    if is_merged {
+                        if let Some(prev) = commands.last_mut() {
+                            prev.redirections.push(Redirection {
+                                fd: Some(2),
+                                mode: RedirectMode::DupOutput,
+                                target: Word::from_literal("1"),
+                            });
+                        }
+                    }
+                    commands.push(next_cmd);
+                }
                 if let Some(true) = negate.map(|_| true) {
                     if let Some(first) = commands.first_mut() {
                         first.negate = true;
