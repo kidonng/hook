@@ -44,5 +44,6 @@ cat script.fish | cargo run -p hook
 
 ## Documentation and Plans
 
-- Place all design documents, specs, and implementation plans directly in the workspace root directory.
+- Place all design documents and specs in the root `specs/` directory (e.g. `specs/YYYY-MM-DD-<name>-design.md`).
+- Place all implementation plans in the root `plans/` directory (e.g. `plans/YYYY-MM-DD-<name>.md`).
 - Do NOT create or use `docs/superpowers/` or nested documentation directories for plans or specs.

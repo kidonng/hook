@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (2024 edition), `rust-peg`, `serde`, Bash 3.2+
 
-**Spec:** `2026-09-05-fish-language-alignment-phase1-design.md`
+**Spec:** `specs/2026-09-05-fish-language-alignment-phase1-design.md`
 
 ## Global Constraints
 
