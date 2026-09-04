@@ -124,6 +124,7 @@ pub struct IfStatement {
     pub then_body: Vec<Statement>,
     pub elif_branches: Vec<(Vec<Pipeline>, Vec<Statement>)>,
     pub else_body: Option<Vec<Statement>>,
+    pub redirections: Vec<Redirection>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -143,12 +144,14 @@ pub struct ForStatement {
     pub variable: String,
     pub values: Vec<Word>,
     pub body: Vec<Statement>,
+    pub redirections: Vec<Redirection>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WhileStatement {
     pub condition: Vec<Pipeline>,
     pub body: Vec<Statement>,
+    pub redirections: Vec<Redirection>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

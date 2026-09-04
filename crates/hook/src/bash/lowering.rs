@@ -56,6 +56,11 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                 })
                 .collect(),
             else_body: i.else_body.as_ref().map(|b| lower_statements(b, scope)),
+            redirections: i
+                .redirections
+                .iter()
+                .map(|r| lower_redirection(r, scope))
+                .collect(),
         }),
         Statement::Switch(s) => LoweredStatement::Switch(LoweredSwitch {
             value: lower_word(&s.value, scope),
@@ -76,6 +81,11 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                 variable: f.variable.clone(),
                 values,
                 body: lower_statements(&f.body, scope),
+                redirections: f
+                    .redirections
+                    .iter()
+                    .map(|r| lower_redirection(r, scope))
+                    .collect(),
             })
         }
         Statement::While(w) => LoweredStatement::While(LoweredWhile {
@@ -85,6 +95,11 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                 .map(|p| lower_pipeline(p, scope))
                 .collect(),
             body: lower_statements(&w.body, scope),
+            redirections: w
+                .redirections
+                .iter()
+                .map(|r| lower_redirection(r, scope))
+                .collect(),
         }),
         Statement::Function(f) => {
             let mut fn_scope = *scope;

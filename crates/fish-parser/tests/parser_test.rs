@@ -239,3 +239,33 @@ fn test_parse_merged_pipes() {
         }
     }
 }
+
+#[test]
+fn test_parse_block_redirections() {
+    let input_while = "while read -l line\n echo $line\n end < input.txt\n";
+    let program_while = parse(input_while).unwrap();
+    if let Statement::While(w) = &program_while.statements[0] {
+        assert_eq!(w.redirections.len(), 1);
+        assert_eq!(w.redirections[0].mode, RedirectMode::Input);
+    } else {
+        panic!("expected while statement");
+    }
+
+    let input_for = "for x in 1 2 3\n echo $x\n end > output.txt\n";
+    let program_for = parse(input_for).unwrap();
+    if let Statement::For(f) = &program_for.statements[0] {
+        assert_eq!(f.redirections.len(), 1);
+        assert_eq!(f.redirections[0].mode, RedirectMode::Output);
+    } else {
+        panic!("expected for statement");
+    }
+
+    let input_if = "if test -e file\n echo yes\n end 2>/dev/null\n";
+    let program_if = parse(input_if).unwrap();
+    if let Statement::If(i) = &program_if.statements[0] {
+        assert_eq!(i.redirections.len(), 1);
+        assert_eq!(i.redirections[0].fd, Some(2));
+    } else {
+        panic!("expected if statement");
+    }
+}

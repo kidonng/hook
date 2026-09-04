@@ -195,3 +195,15 @@ fn test_transpile_merged_pipes() {
     let bash2 = transpile("make |& less\n");
     assert_eq!(bash2, "make 2>&1 | less\n");
 }
+
+#[test]
+fn test_transpile_block_redirections() {
+    let bash_while = transpile("while read -r line\n  echo \"$line\"\nend < input.txt\n");
+    assert!(bash_while.contains("done < input.txt\n"));
+
+    let bash_for = transpile("for x in 1 2 3\n  echo \"$x\"\nend > output.txt\n");
+    assert!(bash_for.contains("done > output.txt\n"));
+
+    let bash_if = transpile("if test -e file\n  echo yes\nend 2>/dev/null\n");
+    assert!(bash_if.contains("fi 2> /dev/null\n"));
+}

@@ -88,7 +88,12 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
                 emit_statements(else_body, indent + 1, out);
             }
             out.push_str(&pad);
-            out.push_str("fi\n");
+            out.push_str("fi");
+            for redir in &i.redirections {
+                out.push(' ');
+                emit_redirection(redir, out);
+            }
+            out.push('\n');
         }
         LoweredStatement::Switch(s) => {
             out.push_str(&pad);
@@ -122,7 +127,12 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             out.push_str("; do\n");
             emit_statements(&f.body, indent + 1, out);
             out.push_str(&pad);
-            out.push_str("done\n");
+            out.push_str("done");
+            for redir in &f.redirections {
+                out.push(' ');
+                emit_redirection(redir, out);
+            }
+            out.push('\n');
         }
         LoweredStatement::While(w) => {
             out.push_str(&pad);
@@ -131,7 +141,12 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             out.push_str("; do\n");
             emit_statements(&w.body, indent + 1, out);
             out.push_str(&pad);
-            out.push_str("done\n");
+            out.push_str("done");
+            for redir in &w.redirections {
+                out.push(' ');
+                emit_redirection(redir, out);
+            }
+            out.push('\n');
         }
         LoweredStatement::Function(f) => {
             out.push_str(&pad);

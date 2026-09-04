@@ -143,6 +143,7 @@ pub struct LoweredIf {
     pub then_body: Vec<LoweredStatement>,
     pub elif_branches: Vec<(Vec<LoweredPipeline>, Vec<LoweredStatement>)>,
     pub else_body: Option<Vec<LoweredStatement>>,
+    pub redirections: Vec<LoweredRedirection>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -162,12 +163,14 @@ pub struct LoweredFor {
     pub variable: String,
     pub values: Vec<LoweredWord>,
     pub body: Vec<LoweredStatement>,
+    pub redirections: Vec<LoweredRedirection>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredWhile {
     pub condition: Vec<LoweredPipeline>,
     pub body: Vec<LoweredStatement>,
+    pub redirections: Vec<LoweredRedirection>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

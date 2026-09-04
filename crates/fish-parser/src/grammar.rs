@@ -261,12 +261,13 @@ peg::parser! {
               then_body:statement_list()
               elifs:elif_branch()*
               else_body:else_branch()?
-              "end" !keyword_char() {
+              "end" !keyword_char() redirs:(_* r:redirection() { r })* {
                 Statement::If(IfStatement {
                     condition: cond,
                     then_body,
                     elif_branches: elifs,
                     else_body,
+                    redirections: redirs,
                 })
             }
 
@@ -299,21 +300,23 @@ peg::parser! {
         rule for_stmt() -> Statement
             = "for" !keyword_char() _+ var:$(['a'..='z' | 'A'..='Z' | '_']['a'..='z' | 'A'..='Z' | '0'..='9' | '_']*) _+ "in" !keyword_char() _+ vals:(word() ++ (_+)) statement_sep()
               body:statement_list()
-              "end" !keyword_char() {
+              "end" !keyword_char() redirs:(_* r:redirection() { r })* {
                 Statement::For(ForStatement {
                     variable: var.to_string(),
                     values: vals,
                     body,
+                    redirections: redirs,
                 })
             }
 
         rule while_stmt() -> Statement
             = "while" !keyword_char() _+ cond:pipeline_chain() statement_sep()
               body:statement_list()
-              "end" !keyword_char() {
+              "end" !keyword_char() redirs:(_* r:redirection() { r })* {
                 Statement::While(WhileStatement {
                     condition: cond,
                     body,
+                    redirections: redirs,
                 })
             }
 
