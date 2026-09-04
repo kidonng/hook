@@ -214,9 +214,19 @@ peg::parser! {
             }
 
         rule variable_ref() -> WordPart
-            = "$" name:$(['a'..='z' | 'A'..='Z' | '_']['a'..='z' | 'A'..='Z' | '0'..='9' | '_']*) slices:slice()* {
+            = "$" inner:variable_ref() slices:slice()* {
+                if let WordPart::Variable(vref) = inner {
+                    WordPart::Variable(VariableRef {
+                        target: VariableTarget::Indirect(Box::new(vref)),
+                        slices,
+                    })
+                } else {
+                    unreachable!()
+                }
+            }
+            / "$" name:$(['a'..='z' | 'A'..='Z' | '_']['a'..='z' | 'A'..='Z' | '0'..='9' | '_']*) slices:slice()* {
                 WordPart::Variable(VariableRef {
-                    name: name.to_string(),
+                    target: VariableTarget::Named(name.to_string()),
                     slices,
                 })
             }

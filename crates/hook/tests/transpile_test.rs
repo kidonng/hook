@@ -289,3 +289,9 @@ fn test_transpile_slice_assignment_and_erase() {
     let bash_erase_dyn = transpile("set -e fruit[$idx]\n");
     assert_eq!(bash_erase_dyn, "unset \"fruit[$((idx - 1))]\"\n");
 }
+
+#[test]
+fn test_transpile_indirect_variable() {
+    let bash = transpile("set var name\necho $$var\n");
+    assert!(bash.contains("${!var}"));
+}

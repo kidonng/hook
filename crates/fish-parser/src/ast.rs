@@ -87,9 +87,31 @@ pub enum WordPart {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum VariableTarget {
+    Named(String),
+    Indirect(Box<VariableRef>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VariableRef {
-    pub name: String,
+    pub target: VariableTarget,
     pub slices: Vec<Slice>,
+}
+
+impl VariableRef {
+    pub fn new_named(name: impl Into<String>, slices: Vec<Slice>) -> Self {
+        Self {
+            target: VariableTarget::Named(name.into()),
+            slices,
+        }
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        match &self.target {
+            VariableTarget::Named(name) => Some(name.as_str()),
+            VariableTarget::Indirect(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

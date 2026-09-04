@@ -138,6 +138,9 @@ pub enum LoweredVariableRef {
         start: String,
         end: String,
     }, // $argv[$start..$end] -> ${@:$start:$((end - start + 1))}
+    Indirect {
+        name: String,
+    }, // $$var -> ${!var}
     Custom {
         name: String,
         subscript: Option<BashSubscript>,

@@ -158,12 +158,14 @@ fn parse_slice_target(word: &Word) -> Option<(String, SliceIndexIR)> {
         if let WordPart::Literal(prefix) = &word.parts[0] {
             if let Some(name) = prefix.strip_suffix('[') {
                 if let WordPart::Variable(vref) = &word.parts[1] {
-                    if let WordPart::Literal(suffix) = &word.parts[2] {
-                        if suffix == "]" {
-                            return Some((
-                                name.to_string(),
-                                SliceIndexIR::Dynamic(vref.name.clone()),
-                            ));
+                    if let Some(var_name) = vref.name() {
+                        if let WordPart::Literal(suffix) = &word.parts[2] {
+                            if suffix == "]" {
+                                return Some((
+                                    name.to_string(),
+                                    SliceIndexIR::Dynamic(var_name.to_string()),
+                                ));
+                            }
                         }
                     }
                 }
@@ -402,114 +404,132 @@ pub fn lower_word_part(part: &WordPart, scope: &Scope) -> LoweredWordPart {
 }
 
 fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
-    if v.name == "status" && v.slices.is_empty() {
-        return LoweredVariableRef::Status;
-    }
-    if v.name == "pipestatus" && v.slices.is_empty() {
-        return LoweredVariableRef::Pipestatus;
-    }
-    if v.name == "fish_pid" && v.slices.is_empty() {
-        return LoweredVariableRef::FishPid;
-    }
-    if v.name == "last_pid" && v.slices.is_empty() {
-        return LoweredVariableRef::LastPid;
-    }
-    if v.name == "argv" {
-        if v.slices.is_empty() {
-            return LoweredVariableRef::ArgvAll;
-        }
-        if v.slices.len() == 1 {
-            match &v.slices[0] {
-                Slice::Index(SliceIndex::Pos(idx)) => return LoweredVariableRef::ArgvIndex(*idx),
-                Slice::Index(SliceIndex::Neg(1)) => return LoweredVariableRef::ArgvLast,
-                Slice::Index(SliceIndex::Variable(vref)) => {
-                    return LoweredVariableRef::ArgvDynamic(vref.name.clone());
-                }
-                Slice::Range {
-                    start: Some(SliceIndex::Pos(s)),
-                    end: None,
-                } => {
-                    return LoweredVariableRef::ArgvSlice {
-                        start: *s,
-                        len: None,
-                    };
-                }
-                Slice::Range {
-                    start: Some(SliceIndex::Pos(s)),
-                    end: Some(SliceIndex::Neg(1)),
-                } => {
-                    return LoweredVariableRef::ArgvSlice {
-                        start: *s,
-                        len: None,
-                    };
-                }
-                Slice::Range {
-                    start: Some(SliceIndex::Pos(s)),
-                    end: Some(SliceIndex::Pos(e)),
-                } if e >= s => {
-                    return LoweredVariableRef::ArgvSlice {
-                        start: *s,
-                        len: Some(e - s + 1),
-                    };
-                }
-                Slice::Range {
-                    start: Some(SliceIndex::Variable(s)),
-                    end: Some(SliceIndex::Variable(e)),
-                } => {
-                    return LoweredVariableRef::ArgvDynamicRange {
-                        start: s.name.clone(),
-                        end: e.name.clone(),
-                    };
-                }
-                _ => {}
+    match &v.target {
+        VariableTarget::Indirect(inner) => {
+            let mut curr = inner.as_ref();
+            while let VariableTarget::Indirect(next) = &curr.target {
+                curr = next.as_ref();
             }
+            let name = curr.name().unwrap_or("").to_string();
+            LoweredVariableRef::Indirect { name }
         }
-    }
+        VariableTarget::Named(name) => {
+            if name == "status" && v.slices.is_empty() {
+                return LoweredVariableRef::Status;
+            }
+            if name == "pipestatus" && v.slices.is_empty() {
+                return LoweredVariableRef::Pipestatus;
+            }
+            if name == "fish_pid" && v.slices.is_empty() {
+                return LoweredVariableRef::FishPid;
+            }
+            if name == "last_pid" && v.slices.is_empty() {
+                return LoweredVariableRef::LastPid;
+            }
+            if name == "argv" {
+                if v.slices.is_empty() {
+                    return LoweredVariableRef::ArgvAll;
+                }
+                if v.slices.len() == 1 {
+                    match &v.slices[0] {
+                        Slice::Index(SliceIndex::Pos(idx)) => {
+                            return LoweredVariableRef::ArgvIndex(*idx);
+                        }
+                        Slice::Index(SliceIndex::Neg(1)) => return LoweredVariableRef::ArgvLast,
+                        Slice::Index(SliceIndex::Variable(vref)) => {
+                            return LoweredVariableRef::ArgvDynamic(
+                                vref.name().unwrap_or("").to_string(),
+                            );
+                        }
+                        Slice::Range {
+                            start: Some(SliceIndex::Pos(s)),
+                            end: None,
+                        } => {
+                            return LoweredVariableRef::ArgvSlice {
+                                start: *s,
+                                len: None,
+                            };
+                        }
+                        Slice::Range {
+                            start: Some(SliceIndex::Pos(s)),
+                            end: Some(SliceIndex::Neg(1)),
+                        } => {
+                            return LoweredVariableRef::ArgvSlice {
+                                start: *s,
+                                len: None,
+                            };
+                        }
+                        Slice::Range {
+                            start: Some(SliceIndex::Pos(s)),
+                            end: Some(SliceIndex::Pos(e)),
+                        } if e >= s => {
+                            return LoweredVariableRef::ArgvSlice {
+                                start: *s,
+                                len: Some(e - s + 1),
+                            };
+                        }
+                        Slice::Range {
+                            start: Some(SliceIndex::Variable(s)),
+                            end: Some(SliceIndex::Variable(e)),
+                        } => {
+                            return LoweredVariableRef::ArgvDynamicRange {
+                                start: s.name().unwrap_or("").to_string(),
+                                end: e.name().unwrap_or("").to_string(),
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+            }
 
-    // Generic variable
-    let subscript = if v.slices.is_empty() {
-        None
-    } else if v.slices.len() == 1 {
-        match &v.slices[0] {
-            Slice::Index(SliceIndex::Pos(n)) => {
-                let zero_based = if *n > 0 { n - 1 } else { 0 };
-                Some(BashSubscript::ZeroBasedIndex(zero_based))
-            }
-            Slice::Index(SliceIndex::Neg(k)) => Some(BashSubscript::NegativeOffsetFromLength(*k)),
-            Slice::Index(SliceIndex::Variable(vref)) => {
-                Some(BashSubscript::DynamicVariable(vref.name.clone()))
-            }
-            Slice::Range {
-                start: Some(SliceIndex::Pos(s)),
-                end: Some(SliceIndex::Pos(e)),
-            } if e >= s => {
-                let offset = if *s > 0 { s - 1 } else { 0 };
-                let length = e - s + 1;
-                Some(BashSubscript::Range { offset, length })
-            }
-            Slice::Range {
-                start: Some(SliceIndex::Pos(s)),
-                end: None,
-            } => {
-                let offset = if *s > 0 { s - 1 } else { 0 };
-                Some(BashSubscript::OpenRange { offset })
-            }
-            Slice::Range {
-                start: Some(SliceIndex::Variable(s)),
-                end: Some(SliceIndex::Variable(e)),
-            } => Some(BashSubscript::DynamicRange {
-                start: s.name.clone(),
-                end: e.name.clone(),
-            }),
-            _ => Some(BashSubscript::All),
-        }
-    } else {
-        Some(BashSubscript::All)
-    };
+            // Generic variable
+            let subscript = if v.slices.is_empty() {
+                None
+            } else if v.slices.len() == 1 {
+                match &v.slices[0] {
+                    Slice::Index(SliceIndex::Pos(n)) => {
+                        let zero_based = if *n > 0 { n - 1 } else { 0 };
+                        Some(BashSubscript::ZeroBasedIndex(zero_based))
+                    }
+                    Slice::Index(SliceIndex::Neg(k)) => {
+                        Some(BashSubscript::NegativeOffsetFromLength(*k))
+                    }
+                    Slice::Index(SliceIndex::Variable(vref)) => Some(
+                        BashSubscript::DynamicVariable(vref.name().unwrap_or("").to_string()),
+                    ),
+                    Slice::Range {
+                        start: Some(SliceIndex::Pos(s)),
+                        end: Some(SliceIndex::Pos(e)),
+                    } if e >= s => {
+                        let offset = if *s > 0 { s - 1 } else { 0 };
+                        let length = e - s + 1;
+                        Some(BashSubscript::Range { offset, length })
+                    }
+                    Slice::Range {
+                        start: Some(SliceIndex::Pos(s)),
+                        end: None,
+                    } => {
+                        let offset = if *s > 0 { s - 1 } else { 0 };
+                        Some(BashSubscript::OpenRange { offset })
+                    }
+                    Slice::Range {
+                        start: Some(SliceIndex::Variable(s)),
+                        end: Some(SliceIndex::Variable(e)),
+                    } => Some(BashSubscript::DynamicRange {
+                        start: s.name().unwrap_or("").to_string(),
+                        end: e.name().unwrap_or("").to_string(),
+                    }),
+                    _ => Some(BashSubscript::All),
+                }
+            } else {
+                Some(BashSubscript::All)
+            };
 
-    LoweredVariableRef::Custom {
-        name: v.name.clone(),
-        subscript,
+            LoweredVariableRef::Custom {
+                name: name.clone(),
+                subscript,
+            }
+        }
     }
 }
 

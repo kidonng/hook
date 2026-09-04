@@ -33,7 +33,7 @@ fn test_parse_variables_and_slices() {
             assert_eq!(
                 args[1].parts,
                 vec![WordPart::Variable(VariableRef {
-                    name: "status".to_string(),
+                    target: VariableTarget::Named("status".to_string()),
                     slices: vec![],
                 })]
             );
@@ -41,7 +41,7 @@ fn test_parse_variables_and_slices() {
             assert_eq!(
                 args[2].parts,
                 vec![WordPart::Variable(VariableRef {
-                    name: "argv".to_string(),
+                    target: VariableTarget::Named("argv".to_string()),
                     slices: vec![Slice::Index(SliceIndex::Pos(1))],
                 })]
             );
@@ -49,7 +49,7 @@ fn test_parse_variables_and_slices() {
             assert_eq!(
                 args[3].parts,
                 vec![WordPart::Variable(VariableRef {
-                    name: "var".to_string(),
+                    target: VariableTarget::Named("var".to_string()),
                     slices: vec![Slice::Range {
                         start: Some(SliceIndex::Pos(1)),
                         end: Some(SliceIndex::Pos(3)),
@@ -60,7 +60,7 @@ fn test_parse_variables_and_slices() {
             assert_eq!(
                 args[4].parts,
                 vec![WordPart::Variable(VariableRef {
-                    name: "var".to_string(),
+                    target: VariableTarget::Named("var".to_string()),
                     slices: vec![Slice::Index(SliceIndex::Neg(1))],
                 })]
             );
@@ -304,7 +304,7 @@ fn test_parse_dynamic_variable_slice_index() {
     if let Statement::Pipeline(p) = &program.statements[0] {
         let arg = &p.commands[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
-            assert_eq!(v.name, "letters");
+            assert_eq!(v.name(), Some("letters"));
             assert_eq!(v.slices.len(), 1);
             assert!(matches!(v.slices[0], Slice::Index(SliceIndex::Variable(_))));
         } else {
@@ -314,7 +314,7 @@ fn test_parse_dynamic_variable_slice_index() {
     if let Statement::Pipeline(p) = &program.statements[1] {
         let arg = &p.commands[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
-            assert_eq!(v.name, "letters");
+            assert_eq!(v.name(), Some("letters"));
             assert_eq!(v.slices.len(), 1);
             assert!(matches!(
                 v.slices[0],
@@ -323,6 +323,20 @@ fn test_parse_dynamic_variable_slice_index() {
                     end: Some(SliceIndex::Variable(_))
                 }
             ));
+        } else {
+            panic!("expected variable");
+        }
+    }
+}
+
+#[test]
+fn test_parse_indirect_variable() {
+    let program = parse("echo $$var\n").unwrap();
+    assert_eq!(program.statements.len(), 1);
+    if let Statement::Pipeline(p) = &program.statements[0] {
+        let arg = &p.commands[0].args[1];
+        if let WordPart::Variable(v) = &arg.parts[0] {
+            assert!(matches!(v.target, VariableTarget::Indirect(_)));
         } else {
             panic!("expected variable");
         }

@@ -13,7 +13,7 @@ fn test_ast_serialization() {
                     },
                     Word {
                         parts: vec![WordPart::Variable(VariableRef {
-                            name: "status".to_string(),
+                            target: VariableTarget::Named("status".to_string()),
                             slices: vec![],
                         })],
                     },
