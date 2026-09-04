@@ -207,3 +207,10 @@ fn test_transpile_block_redirections() {
     let bash_if = transpile("if test -e file\n  echo yes\nend 2>/dev/null\n");
     assert!(bash_if.contains("fi 2> /dev/null\n"));
 }
+
+#[test]
+fn test_transpile_function_with_wraps_and_events() {
+    let fish = "function g -w git -d 'git alias'\n  git $argv\nend\n";
+    let bash = transpile(fish);
+    assert_eq!(bash, "g() {\n  git \"$@\"\n}\n");
+}

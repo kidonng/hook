@@ -10,6 +10,7 @@ enum CommandItem {
 enum FuncOpt {
     Args(Vec<String>),
     Desc(String),
+    Ignored,
 }
 
 peg::parser! {
@@ -330,6 +331,7 @@ peg::parser! {
                     match opt {
                         FuncOpt::Args(mut a) => named_args.append(&mut a),
                         FuncOpt::Desc(d) => description = Some(d),
+                        FuncOpt::Ignored => {}
                     }
                 }
                 let func_name = name.as_single_literal().unwrap_or("").to_string();
@@ -362,7 +364,13 @@ peg::parser! {
                 };
                 FuncOpt::Desc(desc)
             }
-
+            / _+ ("-w" / "--wraps") _+ word() { FuncOpt::Ignored }
+            / _+ ("-V" / "--inherit-variable") _+ ident() { FuncOpt::Ignored }
+            / _+ ("-e" / "--on-event") _+ ident() { FuncOpt::Ignored }
+            / _+ ("-s" / "--on-signal") _+ ident() { FuncOpt::Ignored }
+            / _+ ("-v" / "--on-variable") _+ ident() { FuncOpt::Ignored }
+            / _+ ("-j" / "--on-job-exit") _+ ident() { FuncOpt::Ignored }
+            / _+ ("-S" / "--no-scope-shadowing") { FuncOpt::Ignored }
         rule begin_stmt() -> Statement
             = comb:combinator_prefix()? _* "begin" !keyword_char() statement_sep()
               body:statement_list()

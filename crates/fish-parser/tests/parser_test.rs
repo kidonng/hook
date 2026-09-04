@@ -269,3 +269,22 @@ fn test_parse_block_redirections() {
         panic!("expected if statement");
     }
 }
+
+#[test]
+fn test_parse_function_with_extended_options() {
+    let fish_code = r#"
+function my_git_wrap --wraps git -d "Git wrapper"
+    git $argv
+end
+
+function my_event_handler -e fish_prompt -S
+    echo prompt
+end
+
+function my_inherit -V PWD -a name
+    echo $name in $PWD
+end
+"#;
+    let program = parse(fish_code).unwrap();
+    assert_eq!(program.statements.len(), 3);
+}
