@@ -1,5 +1,5 @@
 {
-  description = "hook: Fish shell to Bash 3.2 transpiler";
+  description = "hook: Fish shell to modern Bash (5.0+) transpiler";
 
   inputs = {
     nixpkgs.url = "https://flakehub.com/f/DeterminateSystems/nixpkgs-weekly/0.1";

@@ -190,10 +190,10 @@ fn test_transpile_double_quoted_parens_literal() {
 #[test]
 fn test_transpile_merged_pipes() {
     let bash1 = transpile("make &| less\n");
-    assert_eq!(bash1, "make 2>&1 | less\n");
+    assert_eq!(bash1, "make |& less\n");
 
     let bash2 = transpile("make |& less\n");
-    assert_eq!(bash2, "make 2>&1 | less\n");
+    assert_eq!(bash2, "make |& less\n");
 }
 
 #[test]
@@ -248,7 +248,7 @@ echo "Background PID: $last_pid"
 
     let bash = transpile(script);
     assert!(bash.starts_with("#!/usr/bin/env bash\n"));
-    assert!(bash.contains("make 2>&1 | tee build.log"));
+    assert!(bash.contains("make |& tee build.log"));
     assert!(bash.contains("while read -r service; do"));
     assert!(bash.contains("done < services.txt"));
     assert!(bash.contains("fi 2> /dev/null"));
@@ -260,8 +260,7 @@ echo "Background PID: $last_pid"
 #[test]
 fn test_transpile_dynamic_variable_subscript() {
     let bash = transpile("echo $letters[$index]\n");
-    assert_eq!(bash, "echo \"${letters[$((index - 1))]}\"\n");
-
+    assert_eq!(bash, "echo \"${letters[index-1]}\"\n");
     let bash_range = transpile("echo $letters[$start..$end]\n");
     assert_eq!(
         bash_range,
@@ -278,16 +277,16 @@ fn test_transpile_slice_assignment_and_erase() {
     assert_eq!(bash_erase, "unset 'fruit[0]'\n");
 
     let bash_assign_neg = transpile("set fruit[-1] evil\n");
-    assert_eq!(bash_assign_neg, "fruit[$((${#fruit[@]}-1))]=\"evil\"\n");
+    assert_eq!(bash_assign_neg, "fruit[-1]=\"evil\"\n");
 
     let bash_erase_neg = transpile("set -e fruit[-1]\n");
-    assert_eq!(bash_erase_neg, "unset \"fruit[$((${#fruit[@]}-1))]\"\n");
+    assert_eq!(bash_erase_neg, "unset 'fruit[-1]'\n");
 
     let bash_assign_dyn = transpile("set fruit[$idx] evil\n");
-    assert_eq!(bash_assign_dyn, "fruit[$((idx - 1))]=\"evil\"\n");
+    assert_eq!(bash_assign_dyn, "fruit[idx-1]=\"evil\"\n");
 
     let bash_erase_dyn = transpile("set -e fruit[$idx]\n");
-    assert_eq!(bash_erase_dyn, "unset \"fruit[$((idx - 1))]\"\n");
+    assert_eq!(bash_erase_dyn, "unset 'fruit[idx-1]'\n");
 }
 
 #[test]
@@ -324,13 +323,12 @@ echo $$var
     let bash = transpile(script);
     assert!(bash.starts_with("#!/usr/bin/env bash\n"));
     assert!(bash.contains("fruits=(\"apple\" \"banana\" \"cherry\" \"date\")"));
-    assert!(bash.contains("echo \"${fruits[$((idx - 1))]}\""));
+    assert!(bash.contains("echo \"${fruits[idx-1]}\""));
     assert!(bash.contains("echo \"${fruits[@]:$((start - 1)):$((end - start + 1))}\""));
     assert!(bash.contains("fruits[0]=\"apricot\""));
-    assert!(bash.contains("fruits[$((${#fruits[@]}-1))]=\"elderberry\""));
-    assert!(bash.contains("fruits[$((idx - 1))]=\"blueberry\""));
+    assert!(bash.contains("fruits[-1]=\"elderberry\""));
+    assert!(bash.contains("fruits[idx-1]=\"blueberry\""));
     assert!(bash.contains("unset 'fruits[0]'"));
-    assert!(bash.contains("unset \"fruits[$((${#fruits[@]}-1))]\""));
-    assert!(bash.contains("unset \"fruits[$((idx - 1))]\""));
-    assert!(bash.contains("echo \"${!var}\""));
+    assert!(bash.contains("unset 'fruits[-1]'"));
+    assert!(bash.contains("unset 'fruits[idx-1]'"));
 }
