@@ -26,7 +26,7 @@ peg::parser! {
 
         pub rule statement_list() -> Vec<Statement>
             = statement_sep()? stmts:(s:statement() ** statement_sep()) statement_sep()? {
-                stmts.into_iter().filter(|s| match s {
+                stmts.into_iter().flatten().filter(|s| match s {
                     Statement::Comment(_) => true,
                     Statement::Pipeline(p) => !p.commands.is_empty(),
                     _ => true,
@@ -34,7 +34,7 @@ peg::parser! {
             }
 
         rule statement_sep()
-            = (_* (['\n' | ';'] / ("\\" "\n")))+ _*
+            = (_* ['\n' | ';'])+ _*
 
         rule _() = [' ' | '\t']
 
@@ -48,22 +48,21 @@ peg::parser! {
 
         rule block_terminator()
             = ("end" / "else" / "case") !keyword_char()
-        pub rule statement() -> Statement
+        pub rule statement() -> Vec<Statement>
             = !block_terminator() s:inner_statement() { s }
 
-        rule inner_statement() -> Statement
-            = comment()
-            / return_stmt()
-            / break_stmt()
-            / continue_stmt()
-            / if_stmt()
-            / switch_stmt()
-            / for_stmt()
-            / while_stmt()
-            / function_stmt()
-            / begin_stmt()
+        rule inner_statement() -> Vec<Statement>
+            = s:comment() { vec![s] }
+            / s:return_stmt() { vec![s] }
+            / s:break_stmt() { vec![s] }
+            / s:continue_stmt() { vec![s] }
+            / s:if_stmt() { vec![s] }
+            / s:switch_stmt() { vec![s] }
+            / s:for_stmt() { vec![s] }
+            / s:while_stmt() { vec![s] }
+            / s:function_stmt() { vec![s] }
+            / s:begin_stmt() { vec![s] }
             / pipeline_stmt()
-
         rule comment() -> Statement
             = "#" s:$((!['\n'][_])*) {
                 Statement::Comment(s.to_string())
@@ -77,11 +76,36 @@ peg::parser! {
 
         rule continue_stmt() -> Statement
             = "continue" !keyword_char() { Statement::Continue }
-        rule pipeline_stmt() -> Statement
-            = p:pipeline() { Statement::Pipeline(p) }
+        rule pipeline_stmt() -> Vec<Statement>
+            = chain:pipeline_chain() {
+                chain.into_iter().map(Statement::Pipeline).collect()
+            }
 
+        rule pipeline_chain() -> Vec<Pipeline>
+            = head:pipeline() tail:(cont_space() comb:combinator_op() cont_space() p:pipeline() { (comb, p) })* {
+                let mut list = vec![head];
+                for (comb, mut p) in tail {
+                    p.combinator = comb;
+                    list.push(p);
+                }
+                list
+            }
+
+        rule combinator_op() -> Combinator
+            = "and" !keyword_char() { Combinator::And }
+            / "or" !keyword_char() { Combinator::Or }
+            / "&&" { Combinator::And }
+            / "||" { Combinator::Or }
+
+        rule cont_space()
+            = (_ / ("\\" "\n") / ("#" [^'\n']* "\n") / "\n")*
+
+        rule pipe_sep()
+            = _* "|" cont_space()
+        rule negate() -> bool
+            = ("not" !keyword_char() _+ / "!" _*) { true }
         rule pipeline() -> Pipeline
-            = !reserved_keyword() comb:combinator_prefix()? _* negate:("not" !keyword_char() _+)? cmds:(command() ++ (_* "|" _*)) bg:(_* "&")? {
+            = !reserved_keyword() comb:combinator_prefix()? _* negate:negate()? cmds:(command() ++ pipe_sep()) bg:(_* "&" !['&' | '>'])? {
                 let mut commands = cmds;
                 if let Some(true) = negate.map(|_| true) {
                     if let Some(first) = commands.first_mut() {
@@ -101,8 +125,14 @@ peg::parser! {
             / "&&" _* { Combinator::And }
             / "||" _* { Combinator::Or }
 
+        rule line_cont()
+            = "\\" _* "\n" (_* "#" [^'\n']* "\n")* _*
+
+        rule cmd_arg_sep()
+            = (_ / line_cont())+
+
         rule command() -> Command
-            = items:(command_item() ++ (_+)) {
+            = items:(command_item() ++ cmd_arg_sep()) {
                 let mut args = Vec::new();
                 let mut redirections = Vec::new();
                 for item in items {
@@ -194,20 +224,19 @@ peg::parser! {
             / n:$(['0'..='9']+) { SliceIndex::Pos(n.parse::<usize>().unwrap()) }
 
         rule command_subst() -> WordPart
-            = "$(" _* stmts:statement_list() _* ")" {
-                WordPart::CommandSubst(stmts)
+            = "$(" _* stmts:statement_list() _* ")" slices:slice()* {
+                WordPart::CommandSubst { statements: stmts, slices }
             }
-            / "(" _* stmts:statement_list() _* ")" {
-                WordPart::CommandSubst(stmts)
+            / "(" _* stmts:statement_list() _* ")" slices:slice()* {
+                WordPart::CommandSubst { statements: stmts, slices }
             }
-
         rule brace_expansion() -> WordPart
             = "{" _* words:(word() ** (_* "," _*)) _* "}" {
                 WordPart::BraceExpansion(words)
             }
 
         rule if_stmt() -> Statement
-            = "if" !keyword_char() _+ cond:pipeline() statement_sep()
+            = "if" !keyword_char() _+ cond:pipeline_chain() statement_sep()
               then_body:statement_list()
               elifs:elif_branch()*
               else_body:else_branch()?
@@ -220,8 +249,8 @@ peg::parser! {
                 })
             }
 
-        rule elif_branch() -> (Pipeline, Vec<Statement>)
-            = "else" !keyword_char() _+ "if" !keyword_char() _+ cond:pipeline() statement_sep() body:statement_list() {
+        rule elif_branch() -> (Vec<Pipeline>, Vec<Statement>)
+            = "else" !keyword_char() _+ "if" !keyword_char() _+ cond:pipeline_chain() statement_sep() body:statement_list() {
                 (cond, body)
             }
 
@@ -258,7 +287,7 @@ peg::parser! {
             }
 
         rule while_stmt() -> Statement
-            = "while" !keyword_char() _+ cond:pipeline() statement_sep()
+            = "while" !keyword_char() _+ cond:pipeline_chain() statement_sep()
               body:statement_list()
               "end" !keyword_char() {
                 Statement::While(WhileStatement {
@@ -311,10 +340,11 @@ peg::parser! {
             }
 
         rule begin_stmt() -> Statement
-            = "begin" !keyword_char() statement_sep()
+            = comb:combinator_prefix()? _* "begin" !keyword_char() statement_sep()
               body:statement_list()
               "end" !keyword_char() redirs:(_* r:redirection() { r })* {
                 Statement::BeginBlock(BeginBlock {
+                    combinator: comb.unwrap_or(Combinator::None),
                     body,
                     redirections: redirs,
                 })

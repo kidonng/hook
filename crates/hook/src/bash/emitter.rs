@@ -1,5 +1,5 @@
-use super::ir::*;
-use fish_parser::ast::{Combinator, RedirectMode};
+use crate::bash::ir::*;
+use fish_parser::ast::{Combinator, RedirectMode, Slice, SliceIndex};
 
 pub fn emit_bash(program: &LoweredProgram) -> String {
     let mut out = String::new();
@@ -54,20 +54,31 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             out.push('\n');
         }
         LoweredStatement::Pipeline(p) => {
-            out.push_str(&pad);
-            emit_pipeline(p, out);
-            out.push('\n');
+            if p.combinator != Combinator::None && out.ends_with('\n') {
+                out.pop();
+                match p.combinator {
+                    Combinator::And => out.push_str(" && "),
+                    Combinator::Or => out.push_str(" || "),
+                    Combinator::None => {}
+                }
+                emit_pipeline_commands(p, out);
+                out.push('\n');
+            } else {
+                out.push_str(&pad);
+                emit_pipeline(p, out);
+                out.push('\n');
+            }
         }
         LoweredStatement::If(i) => {
             out.push_str(&pad);
             out.push_str("if ");
-            emit_pipeline(&i.condition, out);
+            emit_pipeline_chain(&i.condition, out);
             out.push_str("; then\n");
             emit_statements(&i.then_body, indent + 1, out);
             for (cond, body) in &i.elif_branches {
                 out.push_str(&pad);
                 out.push_str("elif ");
-                emit_pipeline(cond, out);
+                emit_pipeline_chain(cond, out);
                 out.push_str("; then\n");
                 emit_statements(body, indent + 1, out);
             }
@@ -116,7 +127,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
         LoweredStatement::While(w) => {
             out.push_str(&pad);
             out.push_str("while ");
-            emit_pipeline(&w.condition, out);
+            emit_pipeline_chain(&w.condition, out);
             out.push_str("; do\n");
             emit_statements(&w.body, indent + 1, out);
             out.push_str(&pad);
@@ -128,14 +139,42 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             for (idx, arg) in f.named_args.iter().enumerate() {
                 out.push_str(&format!("{}  local {}=\"${}\"\n", pad, arg, idx + 1));
             }
+            let has_executable = !f.named_args.is_empty()
+                || f.body
+                    .iter()
+                    .any(|s| !matches!(s, LoweredStatement::Comment(_)));
             emit_statements(&f.body, indent + 1, out);
+            if !has_executable {
+                out.push_str(&format!("{}  :\n", pad));
+            }
             out.push_str(&pad);
             out.push_str("}\n");
         }
         LoweredStatement::BeginBlock(b) => {
-            out.push_str(&pad);
-            out.push_str("{\n");
+            if b.combinator != Combinator::None && out.ends_with('\n') {
+                out.pop();
+                match b.combinator {
+                    Combinator::And => out.push_str(" && {\n"),
+                    Combinator::Or => out.push_str(" || {\n"),
+                    Combinator::None => out.push_str(" {\n"),
+                }
+            } else {
+                out.push_str(&pad);
+                match b.combinator {
+                    Combinator::And => out.push_str("&& "),
+                    Combinator::Or => out.push_str("|| "),
+                    Combinator::None => {}
+                }
+                out.push_str("{\n");
+            }
+            let has_executable = b
+                .body
+                .iter()
+                .any(|s| !matches!(s, LoweredStatement::Comment(_)));
             emit_statements(&b.body, indent + 1, out);
+            if !has_executable {
+                out.push_str(&format!("{}  :\n", pad));
+            }
             out.push_str(&pad);
             out.push('}');
             for redir in &b.redirections {
@@ -199,6 +238,11 @@ fn emit_assignment(assign: &AssignmentIR, out: &mut String) {
         AssignmentIR::Erase { name } => {
             out.push_str(&format!("unset {}", name));
         }
+        AssignmentIR::ArgvLast { value } => {
+            out.push_str("set -- \"${@:1:$#-1}\" \"");
+            emit_word_inner(value, out);
+            out.push('\"');
+        }
     }
 }
 
@@ -213,12 +257,20 @@ fn emit_quoted_values(values: &[LoweredWord], out: &mut String) {
     }
 }
 
-fn emit_pipeline(p: &LoweredPipeline, out: &mut String) {
-    match p.combinator {
-        Combinator::And => out.push_str("&& "),
-        Combinator::Or => out.push_str("|| "),
-        Combinator::None => {}
+fn emit_pipeline_chain(pipelines: &[LoweredPipeline], out: &mut String) {
+    for (idx, p) in pipelines.iter().enumerate() {
+        if idx > 0 {
+            match p.combinator {
+                Combinator::And => out.push_str(" && "),
+                Combinator::Or => out.push_str(" || "),
+                Combinator::None => out.push_str("; "),
+            }
+        }
+        emit_pipeline_commands(p, out);
     }
+}
+
+fn emit_pipeline_commands(p: &LoweredPipeline, out: &mut String) {
     for (idx, cmd) in p.commands.iter().enumerate() {
         if idx > 0 {
             out.push_str(" | ");
@@ -227,6 +279,41 @@ fn emit_pipeline(p: &LoweredPipeline, out: &mut String) {
     }
     if p.background {
         out.push_str(" &");
+    }
+}
+
+fn emit_pipeline(p: &LoweredPipeline, out: &mut String) {
+    match p.combinator {
+        Combinator::And => out.push_str("&& "),
+        Combinator::Or => out.push_str("|| "),
+        Combinator::None => {}
+    }
+    emit_pipeline_commands(p, out);
+}
+
+fn emit_command_subst_slices(slices: &[Slice], out: &mut String) {
+    for s in slices {
+        match s {
+            Slice::Index(SliceIndex::Pos(1)) => {
+                out.push_str(" | head -n 1");
+            }
+            Slice::Index(SliceIndex::Pos(n)) => {
+                out.push_str(&format!(" | sed -n '{}p'", n));
+            }
+            Slice::Index(SliceIndex::Neg(1)) => {
+                out.push_str(" | tail -n 1");
+            }
+            Slice::Index(SliceIndex::Neg(n)) => {
+                out.push_str(&format!(" | tail -n {}", n));
+            }
+            Slice::Range { start, end } => {
+                if let Some(SliceIndex::Pos(s)) = start {
+                    if let Some(SliceIndex::Pos(e)) = end {
+                        out.push_str(&format!(" | sed -n '{},{}p'", s, e));
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -288,11 +375,12 @@ fn emit_word_part_inner(part: &LoweredWordPart, out: &mut String) {
             }
         }
         LoweredWordPart::Variable(v) => emit_variable_ref_inner(v, out),
-        LoweredWordPart::CommandSubst { stmts, .. } => {
+        LoweredWordPart::CommandSubst { stmts, slices, .. } => {
             out.push_str("$(");
             let mut inner = String::new();
             emit_statements(stmts, 0, &mut inner);
             out.push_str(inner.trim_end());
+            emit_command_subst_slices(slices, out);
             out.push(')');
         }
         LoweredWordPart::ProcessSubst(pipeline) => {
@@ -329,7 +417,11 @@ pub fn emit_word_part(part: &LoweredWordPart, out: &mut String) {
             out.push('\"');
         }
         LoweredWordPart::Variable(v) => emit_variable_ref(v, out),
-        LoweredWordPart::CommandSubst { stmts, quoted } => {
+        LoweredWordPart::CommandSubst {
+            stmts,
+            slices,
+            quoted,
+        } => {
             if *quoted {
                 out.push_str("\"$(");
             } else {
@@ -338,6 +430,7 @@ pub fn emit_word_part(part: &LoweredWordPart, out: &mut String) {
             let mut inner = String::new();
             emit_statements(stmts, 0, &mut inner);
             out.push_str(inner.trim_end());
+            emit_command_subst_slices(slices, out);
             if *quoted {
                 out.push_str(")\"");
             } else {

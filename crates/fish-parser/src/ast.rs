@@ -72,7 +72,10 @@ pub enum WordPart {
     SingleQuoted(String),
     DoubleQuoted(Vec<WordPart>),
     Variable(VariableRef),
-    CommandSubst(Vec<Statement>),
+    CommandSubst {
+        statements: Vec<Statement>,
+        slices: Vec<Slice>,
+    },
     BraceExpansion(Vec<Word>),
 }
 
@@ -117,9 +120,9 @@ pub enum RedirectMode {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IfStatement {
-    pub condition: Pipeline,
+    pub condition: Vec<Pipeline>,
     pub then_body: Vec<Statement>,
-    pub elif_branches: Vec<(Pipeline, Vec<Statement>)>,
+    pub elif_branches: Vec<(Vec<Pipeline>, Vec<Statement>)>,
     pub else_body: Option<Vec<Statement>>,
 }
 
@@ -144,7 +147,7 @@ pub struct ForStatement {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WhileStatement {
-    pub condition: Pipeline,
+    pub condition: Vec<Pipeline>,
     pub body: Vec<Statement>,
 }
 
@@ -158,6 +161,7 @@ pub struct FunctionStatement {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BeginBlock {
+    pub combinator: Combinator,
     pub body: Vec<Statement>,
     pub redirections: Vec<Redirection>,
 }

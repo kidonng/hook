@@ -78,8 +78,8 @@ fn test_parse_command_substitution_and_psub() {
             let args = &p.commands[0].args;
             assert_eq!(args.len(), 3);
             match &args[1].parts[0] {
-                WordPart::CommandSubst(stmts) => {
-                    assert_eq!(stmts.len(), 1);
+                WordPart::CommandSubst { statements, .. } => {
+                    assert_eq!(statements.len(), 1);
                 }
                 _ => panic!("expected CommandSubst"),
             }
@@ -128,4 +128,68 @@ end
         }
         _ => panic!("expected function statement"),
     }
+}
+
+#[test]
+fn test_parse_multiline_pipe_with_comments() {
+    let input = r#"
+echo $argv |
+    string replace 's#' 'nix shell nixpkgs#' |
+    # comment
+    string replace , ' nixpkgs#'
+"#;
+    let program = parse(input).expect("parsing multiline pipe failed");
+    assert_eq!(program.statements.len(), 1);
+    match &program.statements[0] {
+        Statement::Pipeline(p) => {
+            assert_eq!(p.commands.len(), 3);
+        }
+        _ => panic!("expected pipeline"),
+    }
+}
+
+#[test]
+fn test_parse_compound_pipeline_and_negation() {
+    let input = r#"
+if set --query argv[-1] && ! string match --quiet -- $argv[-1]
+    echo ok
+end
+"#;
+    let program = parse(input).expect("parsing compound pipeline failed");
+    assert_eq!(program.statements.len(), 1);
+}
+
+#[test]
+fn test_parse_command_subst_slice() {
+    let input = r#"
+set --local resolved (
+    dig +short $argv[-1]
+)[1]
+"#;
+    let program = parse(input).expect("parsing command subst slice failed");
+    assert_eq!(program.statements.len(), 1);
+}
+
+#[test]
+fn test_parse_and_begin_block() {
+    let input = r#"
+status is-login; and begin
+    # comment
+end
+"#;
+    let program = parse(input).expect("parsing and begin failed");
+    assert_eq!(program.statements.len(), 2);
+}
+
+#[test]
+fn test_parse_multiline_command_arguments_with_comments() {
+    let input = r#"
+set --local roots \
+    ~/.nix-profile \
+    /opt/homebrew \
+    # comment
+    (string match '/nix/store/*' $PATH)
+"#;
+    let program = parse(input).expect("parsing multiline args failed");
+    assert_eq!(program.statements.len(), 1);
 }

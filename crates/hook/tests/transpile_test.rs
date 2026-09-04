@@ -107,3 +107,76 @@ end
     let result = transpile(fish);
     insta::assert_snapshot!(result);
 }
+
+#[test]
+fn test_transpile_empty_function() {
+    let fish = "function prompt_login\nend\n";
+    let result = transpile(fish);
+    assert!(result.contains("prompt_login() {\n  :\n}"));
+}
+
+#[test]
+fn test_transpile_abbr_function() {
+    let fish = r#"
+function abbr-nix-shell
+    echo $argv |
+        string replace 's#' 'nix shell nixpkgs#' |
+        string replace , ' nixpkgs#'
+    return 0
+end
+"#;
+    let result = transpile(fish);
+    assert!(result.contains("abbr-nix-shell()"));
+}
+
+#[test]
+fn test_transpile_ping_function() {
+    let fish = r#"
+function ping
+    if set --query argv[-1] && ! string match --regex '^(-.+|[\d.]+|[[:alnum:]:]+)$' --quiet -- $argv[-1]
+        set --local resolved (
+          dig +short $argv[-1] |
+          # Exclude CNAMEs
+          string match --invert '*.'
+        )[1]
+
+        if test -z "$resolved"
+            echo "ping: cannot resolve $argv[-1]: Unknown host"
+            return 1
+        end
+
+        set argv[-1] $resolved
+    end
+
+    command ping -b en0 $argv
+end
+"#;
+    let result = transpile(fish);
+    assert!(result.contains("ping()"));
+}
+
+#[test]
+fn test_transpile_and_begin_empty() {
+    let fish = r#"
+status is-login; and begin
+    # Login shell initialisation
+end
+"#;
+    let result = transpile(fish);
+    assert!(result.contains("status is-login && {"));
+    assert!(result.contains(':'));
+}
+
+#[test]
+fn test_transpile_multiline_set_with_comments() {
+    let fish = r#"
+set --local roots \
+    ~/.nix-profile \
+    /opt/homebrew \
+    # Dynamic paths
+    /opt/extra
+"#;
+    let result = transpile(fish);
+    assert!(result.contains("roots="));
+    assert!(!result.contains("~/.nix-profile \n"));
+}

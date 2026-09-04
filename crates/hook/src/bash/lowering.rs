@@ -39,12 +39,21 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
             LoweredStatement::Pipeline(lower_pipeline(p, scope))
         }
         Statement::If(i) => LoweredStatement::If(LoweredIf {
-            condition: lower_pipeline(&i.condition, scope),
+            condition: i
+                .condition
+                .iter()
+                .map(|p| lower_pipeline(p, scope))
+                .collect(),
             then_body: lower_statements(&i.then_body, scope),
             elif_branches: i
                 .elif_branches
                 .iter()
-                .map(|(p, b)| (lower_pipeline(p, scope), lower_statements(b, scope)))
+                .map(|(p, b)| {
+                    (
+                        p.iter().map(|pl| lower_pipeline(pl, scope)).collect(),
+                        lower_statements(b, scope),
+                    )
+                })
                 .collect(),
             else_body: i.else_body.as_ref().map(|b| lower_statements(b, scope)),
         }),
@@ -70,7 +79,11 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
             })
         }
         Statement::While(w) => LoweredStatement::While(LoweredWhile {
-            condition: lower_pipeline(&w.condition, scope),
+            condition: w
+                .condition
+                .iter()
+                .map(|p| lower_pipeline(p, scope))
+                .collect(),
             body: lower_statements(&w.body, scope),
         }),
         Statement::Function(f) => {
@@ -84,6 +97,7 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
             })
         }
         Statement::BeginBlock(b) => LoweredStatement::BeginBlock(LoweredBeginBlock {
+            combinator: b.combinator,
             body: lower_statements(&b.body, scope),
             redirections: b
                 .redirections
@@ -108,6 +122,7 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
         if let Some(lit) = arg.as_single_literal() {
             if lit.starts_with('-') && var_name.is_none() {
                 match lit {
+                    "-q" | "--query" => return None,
                     "-l" | "--local" => is_local = true,
                     "-x" | "--export" => is_export = true,
                     "-gx" | "-xg" => is_export = true,
@@ -130,6 +145,12 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
     }
 
     let name = var_name?;
+
+    if name == "argv[-1]" && !values.is_empty() {
+        return Some(AssignmentIR::ArgvLast {
+            value: values.remove(0),
+        });
+    }
 
     if is_erase {
         Some(AssignmentIR::Erase { name })
@@ -160,6 +181,54 @@ pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
 }
 
 pub fn lower_command(c: &Command, scope: &Scope) -> LoweredCommand {
+    if let Some(cmd_name) = c.args.first().and_then(|w| w.as_single_literal()) {
+        if cmd_name == "set" {
+            let mut is_query = false;
+            let mut query_var = None;
+            for arg in c.args.iter().skip(1) {
+                if let Some(lit) = arg.as_single_literal() {
+                    if lit == "-q" || lit == "--query" {
+                        is_query = true;
+                        continue;
+                    }
+                    if lit == "--" {
+                        continue;
+                    }
+                    if query_var.is_none() && !lit.starts_with('-') {
+                        query_var = Some(lit);
+                    }
+                }
+            }
+            if is_query {
+                if let Some(var) = query_var {
+                    if var == "argv[-1]" || var == "argv" {
+                        return LoweredCommand {
+                            negate: c.negate,
+                            args: vec![
+                                LoweredWord::from_literal("["),
+                                LoweredWord::from_literal("$#"),
+                                LoweredWord::from_literal("-gt"),
+                                LoweredWord::from_literal("0"),
+                                LoweredWord::from_literal("]"),
+                            ],
+                            redirections: vec![],
+                        };
+                    } else {
+                        return LoweredCommand {
+                            negate: c.negate,
+                            args: vec![
+                                LoweredWord::from_literal("["),
+                                LoweredWord::from_literal("-n"),
+                                LoweredWord::from_literal(format!("\"${{{}:-}}\"", var)),
+                                LoweredWord::from_literal("]"),
+                            ],
+                            redirections: vec![],
+                        };
+                    }
+                }
+            }
+        }
+    }
     LoweredCommand {
         negate: c.negate,
         args: c.args.iter().map(|w| lower_word(w, scope)).collect(),
@@ -193,10 +262,10 @@ pub fn lower_word_part(part: &WordPart, scope: &Scope) -> LoweredWordPart {
             LoweredWordPart::DoubleQuoted(parts.iter().map(|p| lower_word_part(p, scope)).collect())
         }
         WordPart::Variable(v) => LoweredWordPart::Variable(lower_variable_ref(v)),
-        WordPart::CommandSubst(stmts) => {
-            // Check for process substitution: single pipeline ending in `psub`
-            if stmts.len() == 1 {
-                if let Statement::Pipeline(p) = &stmts[0] {
+        WordPart::CommandSubst { statements, slices } => {
+            // Check for process substitution: single pipeline ending in `psub` and no slices
+            if slices.is_empty() && statements.len() == 1 {
+                if let Statement::Pipeline(p) = &statements[0] {
                     if let Some(last_cmd) = p.commands.last() {
                         if let Some("psub") =
                             last_cmd.args.first().and_then(|w| w.as_single_literal())
@@ -218,7 +287,8 @@ pub fn lower_word_part(part: &WordPart, scope: &Scope) -> LoweredWordPart {
             let quoted = !scope.in_for_values;
             let mut subst_scope = *scope;
             LoweredWordPart::CommandSubst {
-                stmts: lower_statements(stmts, &mut subst_scope),
+                stmts: lower_statements(statements, &mut subst_scope),
+                slices: slices.clone(),
                 quoted,
             }
         }

@@ -1,4 +1,4 @@
-use fish_parser::ast::{Combinator, RedirectMode};
+use fish_parser::ast::{Combinator, RedirectMode, Slice};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredProgram {
@@ -47,6 +47,9 @@ pub enum AssignmentIR {
     Erase {
         name: String,
     },
+    ArgvLast {
+        value: LoweredWord,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -69,6 +72,11 @@ pub struct LoweredWord {
 }
 
 impl LoweredWord {
+    pub fn from_literal(s: impl Into<String>) -> Self {
+        Self {
+            parts: vec![LoweredWordPart::Literal(s.into())],
+        }
+    }
     pub fn as_literal(&self) -> Option<&str> {
         if self.parts.len() == 1 {
             match &self.parts[0] {
@@ -89,6 +97,7 @@ pub enum LoweredWordPart {
     Variable(LoweredVariableRef),
     CommandSubst {
         stmts: Vec<LoweredStatement>,
+        slices: Vec<Slice>,
         quoted: bool,
     },
     ProcessSubst(LoweredPipeline),
@@ -130,9 +139,9 @@ pub struct LoweredRedirection {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredIf {
-    pub condition: LoweredPipeline,
+    pub condition: Vec<LoweredPipeline>,
     pub then_body: Vec<LoweredStatement>,
-    pub elif_branches: Vec<(LoweredPipeline, Vec<LoweredStatement>)>,
+    pub elif_branches: Vec<(Vec<LoweredPipeline>, Vec<LoweredStatement>)>,
     pub else_body: Option<Vec<LoweredStatement>>,
 }
 
@@ -157,7 +166,7 @@ pub struct LoweredFor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredWhile {
-    pub condition: LoweredPipeline,
+    pub condition: Vec<LoweredPipeline>,
     pub body: Vec<LoweredStatement>,
 }
 
@@ -171,6 +180,7 @@ pub struct LoweredFunction {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredBeginBlock {
+    pub combinator: Combinator,
     pub body: Vec<LoweredStatement>,
     pub redirections: Vec<LoweredRedirection>,
 }
