@@ -287,9 +287,157 @@ pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
         background: p.background,
     }
 }
+fn extract_single_variable(word: &Word) -> Option<&str> {
+    if word.parts.len() == 1 {
+        match &word.parts[0] {
+            WordPart::Variable(vref) if vref.slices.is_empty() => vref.name(),
+            WordPart::DoubleQuoted(inner) if inner.len() == 1 => {
+                if let WordPart::Variable(vref) = &inner[0] {
+                    if vref.slices.is_empty() {
+                        return vref.name();
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 
 pub fn lower_command(c: &Command, scope: &Scope) -> LoweredCommand {
     if let Some(cmd_name) = c.args.first().and_then(|w| w.as_single_literal()) {
+        if cmd_name == "count" {
+            let has_dev_null_redir = c.redirections.iter().any(|r| {
+                matches!(r.mode, RedirectMode::Output | RedirectMode::OutputAndErr)
+                    && r.target.as_single_literal() == Some("/dev/null")
+            });
+
+            if c.args.len() == 2 {
+                if let Some(var) = extract_single_variable(&c.args[1]) {
+                    if var == "argv" {
+                        if has_dev_null_redir {
+                            return LoweredCommand {
+                                negate: c.negate,
+                                args: vec![
+                                    LoweredWord::from_literal("["),
+                                    LoweredWord::from_literal("\"$#\""),
+                                    LoweredWord::from_literal("-gt"),
+                                    LoweredWord::from_literal("0"),
+                                    LoweredWord::from_literal("]"),
+                                ],
+                                redirections: vec![],
+                            };
+                        } else {
+                            return LoweredCommand {
+                                negate: c.negate,
+                                args: vec![
+                                    LoweredWord::from_literal("printf"),
+                                    LoweredWord::from_literal("'%s\\n'"),
+                                    LoweredWord::from_literal("\"$#\""),
+                                ],
+                                redirections: c
+                                    .redirections
+                                    .iter()
+                                    .map(|r| lower_redirection(r, scope))
+                                    .collect(),
+                            };
+                        }
+                    } else {
+                        if has_dev_null_redir {
+                            return LoweredCommand {
+                                negate: c.negate,
+                                args: vec![
+                                    LoweredWord::from_literal("["),
+                                    LoweredWord::from_literal(format!("\"${{#{}[@]}}\"", var)),
+                                    LoweredWord::from_literal("-gt"),
+                                    LoweredWord::from_literal("0"),
+                                    LoweredWord::from_literal("]"),
+                                ],
+                                redirections: vec![],
+                            };
+                        } else {
+                            return LoweredCommand {
+                                negate: c.negate,
+                                args: vec![
+                                    LoweredWord::from_literal("printf"),
+                                    LoweredWord::from_literal("'%s\\n'"),
+                                    LoweredWord::from_literal(format!("\"${{#{}[@]}}\"", var)),
+                                ],
+                                redirections: c
+                                    .redirections
+                                    .iter()
+                                    .map(|r| lower_redirection(r, scope))
+                                    .collect(),
+                            };
+                        }
+                    }
+                }
+            } else if c.args.len() == 1 {
+                if has_dev_null_redir {
+                    return LoweredCommand {
+                        negate: c.negate,
+                        args: vec![
+                            LoweredWord::from_literal("["),
+                            LoweredWord::from_literal("0"),
+                            LoweredWord::from_literal("-gt"),
+                            LoweredWord::from_literal("0"),
+                            LoweredWord::from_literal("]"),
+                        ],
+                        redirections: vec![],
+                    };
+                } else {
+                    return LoweredCommand {
+                        negate: c.negate,
+                        args: vec![
+                            LoweredWord::from_literal("printf"),
+                            LoweredWord::from_literal("'%s\\n'"),
+                            LoweredWord::from_literal("0"),
+                        ],
+                        redirections: c
+                            .redirections
+                            .iter()
+                            .map(|r| lower_redirection(r, scope))
+                            .collect(),
+                    };
+                }
+            } else if has_dev_null_redir {
+                return LoweredCommand {
+                    negate: c.negate,
+                    args: vec![
+                        LoweredWord::from_literal("["),
+                        LoweredWord::from_literal(format!("{}", c.args.len() - 1)),
+                        LoweredWord::from_literal("-gt"),
+                        LoweredWord::from_literal("0"),
+                        LoweredWord::from_literal("]"),
+                    ],
+                    redirections: vec![],
+                };
+            } else {
+                let mut sub_args = vec![
+                    LoweredWord::from_literal("(set"),
+                    LoweredWord::from_literal("--"),
+                ];
+                for arg in c.args.iter().skip(1) {
+                    sub_args.push(lower_word(arg, scope));
+                }
+                sub_args.push(LoweredWord::from_literal(";"));
+                sub_args.push(LoweredWord::from_literal("printf"));
+                sub_args.push(LoweredWord::from_literal("'%s\\n'"));
+                sub_args.push(LoweredWord::from_literal("\"$#\")"));
+                return LoweredCommand {
+                    negate: c.negate,
+                    args: sub_args,
+                    redirections: c
+                        .redirections
+                        .iter()
+                        .map(|r| lower_redirection(r, scope))
+                        .collect(),
+                };
+            }
+        }
         if cmd_name == "set" {
             let mut is_query = false;
             let mut query_var = None;

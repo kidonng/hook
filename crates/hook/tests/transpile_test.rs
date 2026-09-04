@@ -332,3 +332,15 @@ echo $$var
     assert!(bash.contains("unset 'fruits[-1]'"));
     assert!(bash.contains("unset 'fruits[idx-1]'"));
 }
+
+#[test]
+fn test_transpile_count_builtin() {
+    let bash_var = transpile("count $foos\n");
+    assert!(bash_var.contains("${#foos[@]}"));
+
+    let bash_argv = transpile("count $argv\n");
+    assert!(bash_argv.contains("$#"));
+
+    let bash_if = transpile("if count $foos >/dev/null\n  echo yes\nend\n");
+    assert!(bash_if.contains("[ \"${#foos[@]}\" -gt 0 ]"));
+}
