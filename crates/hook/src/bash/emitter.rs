@@ -488,6 +488,8 @@ fn emit_variable_ref_inner(v: &LoweredVariableRef, out: &mut String) {
     match v {
         LoweredVariableRef::Status => out.push_str("$?"),
         LoweredVariableRef::Pipestatus => out.push_str("${PIPESTATUS[@]}"),
+        LoweredVariableRef::FishPid => out.push_str("$$"),
+        LoweredVariableRef::LastPid => out.push_str("$!"),
         LoweredVariableRef::ArgvAll => out.push_str("$@"),
         LoweredVariableRef::ArgvIndex(n) => out.push_str(&format!("${}", n)),
         LoweredVariableRef::ArgvSlice { start, len } => {
@@ -521,6 +523,8 @@ pub fn emit_variable_ref(v: &LoweredVariableRef, out: &mut String) {
     match v {
         LoweredVariableRef::Status => out.push_str("$?"),
         LoweredVariableRef::Pipestatus => out.push_str("\"${PIPESTATUS[@]}\""),
+        LoweredVariableRef::FishPid => out.push_str("\"$$\""),
+        LoweredVariableRef::LastPid => out.push_str("\"$!\""),
         LoweredVariableRef::ArgvAll => out.push_str("\"$@\""),
         LoweredVariableRef::ArgvIndex(n) => out.push_str(&format!("\"${}\"", n)),
         LoweredVariableRef::ArgvSlice { start, len } => {

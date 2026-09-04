@@ -214,3 +214,12 @@ fn test_transpile_function_with_wraps_and_events() {
     let bash = transpile(fish);
     assert_eq!(bash, "g() {\n  git \"$@\"\n}\n");
 }
+
+#[test]
+fn test_transpile_process_id_variables() {
+    let bash = transpile("echo $fish_pid\necho $last_pid\n");
+    assert_eq!(bash, "echo \"$$\"\necho \"$!\"\n");
+
+    let bash_quoted = transpile("echo \"PID: $fish_pid, Background: $last_pid\"\n");
+    assert_eq!(bash_quoted, "echo \"PID: $$, Background: $!\"\n");
+}

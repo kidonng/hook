@@ -108,6 +108,8 @@ pub enum LoweredWordPart {
 pub enum LoweredVariableRef {
     Status,           // $status -> $?
     Pipestatus,       // $pipestatus -> ${PIPESTATUS[@]}
+    FishPid,          // $fish_pid -> $$
+    LastPid,          // $last_pid -> $!
     ArgvAll,          // $argv -> "$@"
     ArgvIndex(usize), // $argv[1] -> $1
     ArgvSlice {

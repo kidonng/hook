@@ -320,6 +320,12 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
     if v.name == "pipestatus" && v.slices.is_empty() {
         return LoweredVariableRef::Pipestatus;
     }
+    if v.name == "fish_pid" && v.slices.is_empty() {
+        return LoweredVariableRef::FishPid;
+    }
+    if v.name == "last_pid" && v.slices.is_empty() {
+        return LoweredVariableRef::LastPid;
+    }
     if v.name == "argv" {
         if v.slices.is_empty() {
             return LoweredVariableRef::ArgvAll;
