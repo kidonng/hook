@@ -15,7 +15,7 @@ enum FuncOpt {
 peg::parser! {
     pub grammar fish_grammar() for str {
         pub rule program() -> Program
-            = _* shebang:shebang_line()? statements:statement_list() _* {
+            = _* shebang:shebang_line()? statements:statement_list() _* ![_] {
                 Program { shebang, statements }
             }
 
@@ -43,9 +43,11 @@ peg::parser! {
 
         rule keyword_char() = ['a'..='z' | 'A'..='Z' | '0'..='9' | '_']
 
+        rule reserved_keyword()
+            = ("if" / "else" / "switch" / "case" / "for" / "while" / "function" / "begin" / "end") !keyword_char()
+
         rule block_terminator()
             = ("end" / "else" / "case") !keyword_char()
-
         pub rule statement() -> Statement
             = !block_terminator() s:inner_statement() { s }
 
@@ -66,7 +68,6 @@ peg::parser! {
             = "#" s:$((!['\n'][_])*) {
                 Statement::Comment(s.to_string())
             }
-
         rule return_stmt() -> Statement
             = "return" !keyword_char() _+ w:word() { Statement::Return(Some(w)) }
             / "return" !keyword_char() { Statement::Return(None) }
@@ -76,12 +77,11 @@ peg::parser! {
 
         rule continue_stmt() -> Statement
             = "continue" !keyword_char() { Statement::Continue }
-
         rule pipeline_stmt() -> Statement
             = p:pipeline() { Statement::Pipeline(p) }
 
         rule pipeline() -> Pipeline
-            = comb:combinator_prefix()? _* negate:("not" !keyword_char() _+)? cmds:(command() ++ (_* "|" _*)) bg:(_* "&")? {
+            = !reserved_keyword() comb:combinator_prefix()? _* negate:("not" !keyword_char() _+)? cmds:(command() ++ (_* "|" _*)) bg:(_* "&")? {
                 let mut commands = cmds;
                 if let Some(true) = negate.map(|_| true) {
                     if let Some(first) = commands.first_mut() {
