@@ -146,6 +146,9 @@ pub enum RedirectMode {
     AppendAndErr,
     DupOutput,
     DupInput,
+    SafeInput,
+    NoClobberOutput,
+    NoClobberAppend,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

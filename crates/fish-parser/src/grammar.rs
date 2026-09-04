@@ -168,16 +168,18 @@ peg::parser! {
             }
 
         rule redirect_mode() -> RedirectMode
-            = ">>" { RedirectMode::Append }
+            = ">>?" { RedirectMode::NoClobberAppend }
+            / ">>" { RedirectMode::Append }
             / ">&" { RedirectMode::DupOutput }
             / "<&" { RedirectMode::DupInput }
+            / "<?" { RedirectMode::SafeInput }
+            / ">?" { RedirectMode::NoClobberOutput }
             / ">" { RedirectMode::Output }
             / "<" { RedirectMode::Input }
             / "^^" { RedirectMode::AppendAndErr }
             / "^" { RedirectMode::OutputAndErr }
             / "&>>" { RedirectMode::AppendAndErr }
             / "&>" { RedirectMode::OutputAndErr }
-
         rule word() -> Word
             = parts:(word_part()+ ) {
                 Word { parts }

@@ -424,6 +424,22 @@ fn emit_redirection(r: &LoweredRedirection, out: &mut String) {
         }
         RedirectMode::DupOutput => out.push_str(">&"),
         RedirectMode::DupInput => out.push_str("<&"),
+        RedirectMode::SafeInput => {
+            out.push_str("< \"$([ -r ");
+            emit_word(&r.target, out);
+            out.push_str(" ] && echo ");
+            emit_word(&r.target, out);
+            out.push_str(" || echo /dev/null)\"");
+            return;
+        }
+        RedirectMode::NoClobberOutput => {
+            out.push('>');
+            out.push(' ');
+        }
+        RedirectMode::NoClobberAppend => {
+            out.push_str(">>");
+            out.push(' ');
+        }
     }
     emit_word(&r.target, out);
 }

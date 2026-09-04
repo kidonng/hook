@@ -350,3 +350,12 @@ fn test_transpile_contains_builtin() {
     let bash = transpile("if contains blue $smurf\n  echo found\nend\n");
     assert!(bash.contains("for __hook_item in"));
 }
+
+#[test]
+fn test_transpile_safe_and_noclobber_redirections() {
+    let bash_safe = transpile("cat <?input.txt\n");
+    assert!(bash_safe.contains("< \"$([ -r input.txt ] && echo input.txt || echo /dev/null)\""));
+
+    let bash_noclobber = transpile("echo hello >?output.txt\n");
+    assert!(bash_noclobber.contains("> output.txt"));
+}

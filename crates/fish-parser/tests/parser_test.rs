@@ -342,3 +342,22 @@ fn test_parse_indirect_variable() {
         }
     }
 }
+
+#[test]
+fn test_parse_safe_and_noclobber_redirections() {
+    let p1 = parse("cat <?input.txt\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p1.statements[0] {
+        assert_eq!(pipe.commands[0].redirections[0].mode, RedirectMode::SafeInput);
+    }
+
+    let p2 = parse("echo hello >?output.txt\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p2.statements[0] {
+        assert_eq!(pipe.commands[0].redirections[0].mode, RedirectMode::NoClobberOutput);
+    }
+
+    let p3 = parse("echo err 2>?err.txt\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p3.statements[0] {
+        assert_eq!(pipe.commands[0].redirections[0].fd, Some(2));
+        assert_eq!(pipe.commands[0].redirections[0].mode, RedirectMode::NoClobberOutput);
+    }
+}
