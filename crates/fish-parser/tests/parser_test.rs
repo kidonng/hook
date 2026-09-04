@@ -297,3 +297,34 @@ end
         panic!("expected function");
     }
 }
+
+#[test]
+fn test_parse_dynamic_variable_slice_index() {
+    let program = parse("echo $letters[$index]\necho $letters[$start..$end]\n").unwrap();
+    if let Statement::Pipeline(p) = &program.statements[0] {
+        let arg = &p.commands[0].args[1];
+        if let WordPart::Variable(v) = &arg.parts[0] {
+            assert_eq!(v.name, "letters");
+            assert_eq!(v.slices.len(), 1);
+            assert!(matches!(v.slices[0], Slice::Index(SliceIndex::Variable(_))));
+        } else {
+            panic!("expected variable");
+        }
+    }
+    if let Statement::Pipeline(p) = &program.statements[1] {
+        let arg = &p.commands[0].args[1];
+        if let WordPart::Variable(v) = &arg.parts[0] {
+            assert_eq!(v.name, "letters");
+            assert_eq!(v.slices.len(), 1);
+            assert!(matches!(
+                v.slices[0],
+                Slice::Range {
+                    start: Some(SliceIndex::Variable(_)),
+                    end: Some(SliceIndex::Variable(_))
+                }
+            ));
+        } else {
+            panic!("expected variable");
+        }
+    }
+}

@@ -321,13 +321,14 @@ fn emit_command_subst_slices(slices: &[Slice], out: &mut String) {
             Slice::Index(SliceIndex::Neg(n)) => {
                 out.push_str(&format!(" | tail -n {}", n));
             }
-            Slice::Range { start, end } => {
-                if let Some(SliceIndex::Pos(s)) = start {
-                    if let Some(SliceIndex::Pos(e)) = end {
-                        out.push_str(&format!(" | sed -n '{},{}p'", s, e));
-                    }
-                }
+            Slice::Range {
+                start: Some(SliceIndex::Pos(s)),
+                end: Some(SliceIndex::Pos(e)),
+            } => {
+                out.push_str(&format!(" | sed -n '{},{}p'", s, e));
             }
+            Slice::Range { .. } => {}
+            _ => {}
         }
     }
 }

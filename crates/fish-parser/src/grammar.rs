@@ -232,7 +232,13 @@ peg::parser! {
         rule slice_index() -> SliceIndex
             = "-" n:$(['0'..='9']+) { SliceIndex::Neg(n.parse::<usize>().unwrap()) }
             / n:$(['0'..='9']+) { SliceIndex::Pos(n.parse::<usize>().unwrap()) }
-
+            / v:variable_ref() {
+                if let WordPart::Variable(vref) = v {
+                    SliceIndex::Variable(vref)
+                } else {
+                    unreachable!()
+                }
+            }
         rule dollar_command_subst() -> WordPart
             = "$(" _* stmts:statement_list() _* ")" slices:slice()* {
                 WordPart::CommandSubst { statements: stmts, slices }

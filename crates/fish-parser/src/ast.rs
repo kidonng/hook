@@ -105,6 +105,7 @@ pub enum Slice {
 pub enum SliceIndex {
     Pos(usize),
     Neg(usize),
+    Variable(VariableRef),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
