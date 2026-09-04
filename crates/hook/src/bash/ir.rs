@@ -35,6 +35,7 @@ pub enum AssignmentIR {
     Global {
         name: String,
         values: Vec<LoweredWord>,
+        in_function: bool,
     },
     Append {
         name: String,
@@ -64,13 +65,20 @@ pub enum AssignmentIR {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SliceIndexIR {
     ZeroBased(usize),
-    NegativeOffset(usize),
+    Negative(isize),
     Dynamic(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PipeKind {
+    Stdout,
+    StdoutAndStderr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredPipeline {
     pub commands: Vec<LoweredCommand>,
+    pub pipe_operators: Vec<PipeKind>,
     pub combinator: Combinator,
     pub background: bool,
 }
@@ -149,10 +157,9 @@ pub enum LoweredVariableRef {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BashSubscript {
-    ZeroBasedIndex(usize),
-    NegativeOffsetFromLength(usize),
-    Range { offset: usize, length: usize },
-    OpenRange { offset: usize },
+    Index(isize),
+    Range { offset: isize, length: usize },
+    OpenRange { offset: isize },
     DynamicVariable(String),
     DynamicRange { start: String, end: String },
     All,
@@ -214,4 +221,23 @@ pub struct LoweredBeginBlock {
     pub combinator: Combinator,
     pub body: Vec<LoweredStatement>,
     pub redirections: Vec<LoweredRedirection>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_modern_ir_pipe_and_subscripts() {
+        let pipeline = LoweredPipeline {
+            commands: vec![],
+            pipe_operators: vec![PipeKind::StdoutAndStderr],
+            combinator: Combinator::None,
+            background: false,
+        };
+        assert_eq!(pipeline.pipe_operators[0], PipeKind::StdoutAndStderr);
+
+        let sub = BashSubscript::Index(-1);
+        assert_eq!(sub, BashSubscript::Index(-1));
+    }
 }

@@ -9,7 +9,7 @@ fn test_lower_set_scope_defense() {
     let prog = parse(input).unwrap();
     let lowered = lower_program(&prog);
     match &lowered.statements[0] {
-        LoweredStatement::Assignment(AssignmentIR::Global { name, values }) => {
+        LoweredStatement::Assignment(AssignmentIR::Global { name, values, .. }) => {
             assert_eq!(name, "foo");
             assert_eq!(values.len(), 1);
         }
@@ -94,7 +94,7 @@ fn test_lower_builtin_vars_and_slices() {
                 args[7].parts[0],
                 LoweredWordPart::Variable(LoweredVariableRef::Custom {
                     name: "var".to_string(),
-                    subscript: Some(BashSubscript::NegativeOffsetFromLength(1)),
+                    subscript: Some(BashSubscript::Index(-1)),
                 })
             );
         }

@@ -227,8 +227,24 @@ fn emit_assignment(assign: &AssignmentIR, out: &mut String) {
             }
             out.push('\"');
         }
-        AssignmentIR::Global { name, values } => {
-            if values.len() <= 1 {
+        AssignmentIR::Global {
+            name,
+            values,
+            in_function,
+        } => {
+            if *in_function {
+                if values.len() <= 1 {
+                    out.push_str(&format!("declare -g {}=\"", name));
+                    if let Some(v) = values.first() {
+                        emit_word_inner(v, out);
+                    }
+                    out.push('\"');
+                } else {
+                    out.push_str(&format!("declare -ga {}=(", name));
+                    emit_quoted_values(values, out);
+                    out.push(')');
+                }
+            } else if values.len() <= 1 {
                 out.push_str(&format!("{}=\"", name));
                 if let Some(v) = values.first() {
                     emit_word_inner(v, out);
@@ -263,11 +279,11 @@ fn emit_assignment(assign: &AssignmentIR, out: &mut String) {
                 SliceIndexIR::ZeroBased(idx) => {
                     out.push_str(&format!("{}[{}]=\"", name, idx));
                 }
-                SliceIndexIR::NegativeOffset(k) => {
-                    out.push_str(&format!("{}[$((${{#{}[@]}}-{}))]=\"", name, name, k));
+                SliceIndexIR::Negative(k) => {
+                    out.push_str(&format!("{}[{}]=\"", name, k));
                 }
                 SliceIndexIR::Dynamic(var_name) => {
-                    out.push_str(&format!("{}[$(({} - 1))]=\"", name, var_name));
+                    out.push_str(&format!("{}[{}-1]=\"", name, var_name));
                 }
             }
             emit_word_inner(value, out);
@@ -277,11 +293,11 @@ fn emit_assignment(assign: &AssignmentIR, out: &mut String) {
             SliceIndexIR::ZeroBased(idx) => {
                 out.push_str(&format!("unset '{}[{}]'", name, idx));
             }
-            SliceIndexIR::NegativeOffset(k) => {
-                out.push_str(&format!("unset \"{}[$((${{#{}[@]}}-{}))]\"", name, name, k));
+            SliceIndexIR::Negative(k) => {
+                out.push_str(&format!("unset '{}[{}]'", name, k));
             }
             SliceIndexIR::Dynamic(var_name) => {
-                out.push_str(&format!("unset \"{}[$(({} - 1))]\"", name, var_name));
+                out.push_str(&format!("unset '{}[{}-1]'", name, var_name));
             }
         },
     }
@@ -314,7 +330,15 @@ fn emit_pipeline_chain(pipelines: &[LoweredPipeline], out: &mut String) {
 fn emit_pipeline_commands(p: &LoweredPipeline, out: &mut String) {
     for (idx, cmd) in p.commands.iter().enumerate() {
         if idx > 0 {
-            out.push_str(" | ");
+            let pipe_op = p
+                .pipe_operators
+                .get(idx - 1)
+                .copied()
+                .unwrap_or(PipeKind::Stdout);
+            match pipe_op {
+                PipeKind::Stdout => out.push_str(" | "),
+                PipeKind::StdoutAndStderr => out.push_str(" |& "),
+            }
         }
         emit_command(cmd, out);
     }
@@ -539,12 +563,7 @@ fn emit_variable_ref_inner(v: &LoweredVariableRef, out: &mut String) {
         LoweredVariableRef::Custom { name, subscript } => match subscript {
             None => out.push_str(&format!("${}", name)),
             Some(BashSubscript::All) => out.push_str(&format!("${{{}[@]}}", name)),
-            Some(BashSubscript::ZeroBasedIndex(idx)) => {
-                out.push_str(&format!("${{{}[{}]}}", name, idx))
-            }
-            Some(BashSubscript::NegativeOffsetFromLength(k)) => {
-                out.push_str(&format!("${{{}[$((${{#{}[@]}}-{}))]}}", name, name, k));
-            }
+            Some(BashSubscript::Index(idx)) => out.push_str(&format!("${{{}[{}]}}", name, idx)),
             Some(BashSubscript::Range { offset, length }) => {
                 out.push_str(&format!("${{{}[@]:{}:{}}}", name, offset, length));
             }
@@ -552,7 +571,7 @@ fn emit_variable_ref_inner(v: &LoweredVariableRef, out: &mut String) {
                 out.push_str(&format!("${{{}[@]:{}}}", name, offset));
             }
             Some(BashSubscript::DynamicVariable(var_name)) => {
-                out.push_str(&format!("${{{}[$(({} - 1))]}}", name, var_name));
+                out.push_str(&format!("${{{}[{}-1]}}", name, var_name));
             }
             Some(BashSubscript::DynamicRange { start, end }) => {
                 out.push_str(&format!(
@@ -592,33 +611,25 @@ pub fn emit_variable_ref(v: &LoweredVariableRef, out: &mut String) {
         LoweredVariableRef::Indirect { name } => {
             out.push_str(&format!("\"${{!{}}}\"", name));
         }
-        LoweredVariableRef::Custom { name, subscript } => {
-            match subscript {
-                None => out.push_str(&format!("\"${}\"", name)),
-                Some(BashSubscript::All) => out.push_str(&format!("\"${{{}[@]}}\"", name)),
-                Some(BashSubscript::ZeroBasedIndex(idx)) => {
-                    out.push_str(&format!("\"${{{}[{}]}}\"", name, idx))
-                }
-                Some(BashSubscript::NegativeOffsetFromLength(k)) => {
-                    // Bash 3.2 safe dynamic array length arithmetic
-                    out.push_str(&format!("\"${{{}[$((${{#{}[@]}}-{}))]}}\"", name, name, k));
-                }
-                Some(BashSubscript::Range { offset, length }) => {
-                    out.push_str(&format!("\"${{{}[@]:{}:{}}}\"", name, offset, length));
-                }
-                Some(BashSubscript::OpenRange { offset }) => {
-                    out.push_str(&format!("\"${{{}[@]:{}}}\"", name, offset));
-                }
-                Some(BashSubscript::DynamicVariable(var_name)) => {
-                    out.push_str(&format!("\"${{{}[$(({} - 1))]}}\"", name, var_name));
-                }
-                Some(BashSubscript::DynamicRange { start, end }) => {
-                    out.push_str(&format!(
-                        "\"${{{}[@]:$(({} - 1)):$(({} - {} + 1))}}\"",
-                        name, start, end, start
-                    ));
-                }
+        LoweredVariableRef::Custom { name, subscript } => match subscript {
+            None => out.push_str(&format!("\"${}\"", name)),
+            Some(BashSubscript::All) => out.push_str(&format!("\"${{{}[@]}}\"", name)),
+            Some(BashSubscript::Index(idx)) => out.push_str(&format!("\"${{{}[{}]}}\"", name, idx)),
+            Some(BashSubscript::Range { offset, length }) => {
+                out.push_str(&format!("\"${{{}[@]:{}:{}}}\"", name, offset, length));
             }
-        }
+            Some(BashSubscript::OpenRange { offset }) => {
+                out.push_str(&format!("\"${{{}[@]:{}}}\"", name, offset));
+            }
+            Some(BashSubscript::DynamicVariable(var_name)) => {
+                out.push_str(&format!("\"${{{}[{}-1]}}\"", name, var_name));
+            }
+            Some(BashSubscript::DynamicRange { start, end }) => {
+                out.push_str(&format!(
+                    "\"${{{}[@]:$(({} - 1)):$(({} - {} + 1))}}\"",
+                    name, start, end, start
+                ));
+            }
+        },
     }
 }

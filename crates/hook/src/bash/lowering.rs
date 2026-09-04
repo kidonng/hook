@@ -138,10 +138,7 @@ fn parse_slice_target(word: &Word) -> Option<(String, SliceIndexIR)> {
                     }
                     if let Ok(num) = idx_str.parse::<isize>() {
                         if num < 0 {
-                            return Some((
-                                name.to_string(),
-                                SliceIndexIR::NegativeOffset((-num) as usize),
-                            ));
+                            return Some((name.to_string(), SliceIndexIR::Negative(num)));
                         } else if num > 0 {
                             return Some((
                                 name.to_string(),
@@ -212,7 +209,7 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
     let target = var_word?;
 
     if let Some((name, slice_idx)) = parse_slice_target(target) {
-        if name == "argv" && slice_idx == SliceIndexIR::NegativeOffset(1) && !values.is_empty() {
+        if name == "argv" && slice_idx == SliceIndexIR::Negative(-1) && !values.is_empty() {
             return Some(AssignmentIR::ArgvLast {
                 value: values.remove(0),
             });
@@ -257,29 +254,35 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
             Some(AssignmentIR::Local { name, values })
         } else {
             // Safety defense: top level falls back to Global
-            Some(AssignmentIR::Global { name, values })
+            Some(AssignmentIR::Global {
+                name,
+                values,
+                in_function: false,
+            })
         }
     } else {
-        Some(AssignmentIR::Global { name, values })
+        Some(AssignmentIR::Global {
+            name,
+            values,
+            in_function: scope.in_function,
+        })
     }
 }
 
 pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
-    let mut commands: Vec<LoweredCommand> =
+    let commands: Vec<LoweredCommand> =
         p.commands.iter().map(|c| lower_command(c, scope)).collect();
-    for (idx, op) in p.pipe_operators.iter().enumerate() {
-        if *op == PipeOperator::StdoutAndStderr {
-            if let Some(cmd) = commands.get_mut(idx) {
-                cmd.redirections.push(LoweredRedirection {
-                    fd: Some(2),
-                    mode: RedirectMode::DupOutput,
-                    target: LoweredWord::from_literal("1"),
-                });
-            }
-        }
-    }
+    let pipe_operators: Vec<PipeKind> = p
+        .pipe_operators
+        .iter()
+        .map(|op| match op {
+            PipeOperator::Stdout => PipeKind::Stdout,
+            PipeOperator::StdoutAndStderr => PipeKind::StdoutAndStderr,
+        })
+        .collect();
     LoweredPipeline {
         commands,
+        pipe_operators,
         combinator: p.combinator,
         background: p.background,
     }
@@ -488,12 +491,10 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
             } else if v.slices.len() == 1 {
                 match &v.slices[0] {
                     Slice::Index(SliceIndex::Pos(n)) => {
-                        let zero_based = if *n > 0 { n - 1 } else { 0 };
-                        Some(BashSubscript::ZeroBasedIndex(zero_based))
+                        let zero_based = if *n > 0 { (*n as isize) - 1 } else { 0 };
+                        Some(BashSubscript::Index(zero_based))
                     }
-                    Slice::Index(SliceIndex::Neg(k)) => {
-                        Some(BashSubscript::NegativeOffsetFromLength(*k))
-                    }
+                    Slice::Index(SliceIndex::Neg(k)) => Some(BashSubscript::Index(-(*k as isize))),
                     Slice::Index(SliceIndex::Variable(vref)) => Some(
                         BashSubscript::DynamicVariable(vref.name().unwrap_or("").to_string()),
                     ),
@@ -501,7 +502,7 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
                         start: Some(SliceIndex::Pos(s)),
                         end: Some(SliceIndex::Pos(e)),
                     } if e >= s => {
-                        let offset = if *s > 0 { s - 1 } else { 0 };
+                        let offset = if *s > 0 { (*s as isize) - 1 } else { 0 };
                         let length = e - s + 1;
                         Some(BashSubscript::Range { offset, length })
                     }
@@ -509,7 +510,7 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
                         start: Some(SliceIndex::Pos(s)),
                         end: None,
                     } => {
-                        let offset = if *s > 0 { s - 1 } else { 0 };
+                        let offset = if *s > 0 { (*s as isize) - 1 } else { 0 };
                         Some(BashSubscript::OpenRange { offset })
                     }
                     Slice::Range {
