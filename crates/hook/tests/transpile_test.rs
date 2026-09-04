@@ -256,3 +256,15 @@ echo "Background PID: $last_pid"
     assert!(bash.contains("echo \"$(pwd)\""));
     assert!(bash.contains("echo \"Background PID: $!\""));
 }
+
+#[test]
+fn test_transpile_dynamic_variable_subscript() {
+    let bash = transpile("echo $letters[$index]\n");
+    assert_eq!(bash, "echo \"${letters[$((index - 1))]}\"\n");
+
+    let bash_range = transpile("echo $letters[$start..$end]\n");
+    assert_eq!(
+        bash_range,
+        "echo \"${letters[@]:$((start - 1)):$((end - start + 1))}\"\n"
+    );
+}

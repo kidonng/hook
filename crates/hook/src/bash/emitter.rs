@@ -501,6 +501,12 @@ fn emit_variable_ref_inner(v: &LoweredVariableRef, out: &mut String) {
             }
         }
         LoweredVariableRef::ArgvLast => out.push_str("${@: -1:1}"),
+        LoweredVariableRef::ArgvDynamic(idx) => {
+            out.push_str(&format!("${{@:{}:1}}", idx));
+        }
+        LoweredVariableRef::ArgvDynamicRange { start, end } => {
+            out.push_str(&format!("${{@:{}:$((({} - {}) + 1))}}", start, end, start));
+        }
         LoweredVariableRef::Custom { name, subscript } => match subscript {
             None => out.push_str(&format!("${}", name)),
             Some(BashSubscript::All) => out.push_str(&format!("${{{}[@]}}", name)),
@@ -515,6 +521,15 @@ fn emit_variable_ref_inner(v: &LoweredVariableRef, out: &mut String) {
             }
             Some(BashSubscript::OpenRange { offset }) => {
                 out.push_str(&format!("${{{}[@]:{}}}", name, offset));
+            }
+            Some(BashSubscript::DynamicVariable(var_name)) => {
+                out.push_str(&format!("${{{}[$(({} - 1))]}}", name, var_name));
+            }
+            Some(BashSubscript::DynamicRange { start, end }) => {
+                out.push_str(&format!(
+                    "${{{}[@]:$(({} - 1)):$(({} - {} + 1))}}",
+                    name, start, end, start
+                ));
             }
         },
     }
@@ -536,6 +551,15 @@ pub fn emit_variable_ref(v: &LoweredVariableRef, out: &mut String) {
             }
         }
         LoweredVariableRef::ArgvLast => out.push_str("\"${@: -1:1}\""),
+        LoweredVariableRef::ArgvDynamic(idx) => {
+            out.push_str(&format!("\"${{@:{}:1}}\"", idx));
+        }
+        LoweredVariableRef::ArgvDynamicRange { start, end } => {
+            out.push_str(&format!(
+                "\"${{@:{}:$((({} - {}) + 1))}}\"",
+                start, end, start
+            ));
+        }
         LoweredVariableRef::Custom { name, subscript } => {
             match subscript {
                 None => out.push_str(&format!("\"${}\"", name)),
@@ -552,6 +576,15 @@ pub fn emit_variable_ref(v: &LoweredVariableRef, out: &mut String) {
                 }
                 Some(BashSubscript::OpenRange { offset }) => {
                     out.push_str(&format!("\"${{{}[@]:{}}}\"", name, offset));
+                }
+                Some(BashSubscript::DynamicVariable(var_name)) => {
+                    out.push_str(&format!("\"${{{}[$(({} - 1))]}}\"", name, var_name));
+                }
+                Some(BashSubscript::DynamicRange { start, end }) => {
+                    out.push_str(&format!(
+                        "\"${{{}[@]:$(({} - 1)):$(({} - {} + 1))}}\"",
+                        name, start, end, start
+                    ));
                 }
             }
         }

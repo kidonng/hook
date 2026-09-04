@@ -349,6 +349,9 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
             match &v.slices[0] {
                 Slice::Index(SliceIndex::Pos(idx)) => return LoweredVariableRef::ArgvIndex(*idx),
                 Slice::Index(SliceIndex::Neg(1)) => return LoweredVariableRef::ArgvLast,
+                Slice::Index(SliceIndex::Variable(vref)) => {
+                    return LoweredVariableRef::ArgvDynamic(vref.name.clone());
+                }
                 Slice::Range {
                     start: Some(SliceIndex::Pos(s)),
                     end: None,
@@ -376,6 +379,15 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
                         len: Some(e - s + 1),
                     };
                 }
+                Slice::Range {
+                    start: Some(SliceIndex::Variable(s)),
+                    end: Some(SliceIndex::Variable(e)),
+                } => {
+                    return LoweredVariableRef::ArgvDynamicRange {
+                        start: s.name.clone(),
+                        end: e.name.clone(),
+                    };
+                }
                 _ => {}
             }
         }
@@ -391,6 +403,9 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
                 Some(BashSubscript::ZeroBasedIndex(zero_based))
             }
             Slice::Index(SliceIndex::Neg(k)) => Some(BashSubscript::NegativeOffsetFromLength(*k)),
+            Slice::Index(SliceIndex::Variable(vref)) => {
+                Some(BashSubscript::DynamicVariable(vref.name.clone()))
+            }
             Slice::Range {
                 start: Some(SliceIndex::Pos(s)),
                 end: Some(SliceIndex::Pos(e)),
@@ -406,6 +421,13 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
                 let offset = if *s > 0 { s - 1 } else { 0 };
                 Some(BashSubscript::OpenRange { offset })
             }
+            Slice::Range {
+                start: Some(SliceIndex::Variable(s)),
+                end: Some(SliceIndex::Variable(e)),
+            } => Some(BashSubscript::DynamicRange {
+                start: s.name.clone(),
+                end: e.name.clone(),
+            }),
             _ => Some(BashSubscript::All),
         }
     } else {

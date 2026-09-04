@@ -117,6 +117,11 @@ pub enum LoweredVariableRef {
         len: Option<usize>,
     }, // $argv[2..-1] -> ${@:2}
     ArgvLast,         // $argv[-1] -> ${@: -1:1}
+    ArgvDynamic(String), // $argv[$idx] -> ${@:$idx:1}
+    ArgvDynamicRange {
+        start: String,
+        end: String,
+    }, // $argv[$start..$end] -> ${@:$start:$((end - start + 1))}
     Custom {
         name: String,
         subscript: Option<BashSubscript>,
@@ -129,6 +134,8 @@ pub enum BashSubscript {
     NegativeOffsetFromLength(usize),
     Range { offset: usize, length: usize },
     OpenRange { offset: usize },
+    DynamicVariable(String),
+    DynamicRange { start: String, end: String },
     All,
 }
 
