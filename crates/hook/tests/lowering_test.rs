@@ -101,3 +101,78 @@ fn test_lower_builtin_vars_and_slices() {
         _ => panic!("expected pipeline"),
     }
 }
+
+#[test]
+fn test_lower_merged_pipe_modern() {
+    let fish = "cmd1 &| cmd2\n";
+    let prog = parse(fish).unwrap();
+    let lowered = lower_program(&prog);
+    let stmt = &lowered.statements[0];
+    if let LoweredStatement::Pipeline(p) = stmt {
+        assert_eq!(p.pipe_operators, vec![PipeKind::StdoutAndStderr]);
+        assert!(
+            p.commands[0].redirections.is_empty(),
+            "should not synthesize 2>&1 redirection"
+        );
+    } else {
+        panic!("expected pipeline");
+    }
+}
+
+#[test]
+fn test_lower_negative_slice_modern() {
+    let fish = "echo $arr[-1]\n";
+    let prog = parse(fish).unwrap();
+    let lowered = lower_program(&prog);
+    if let LoweredStatement::Pipeline(p) = &lowered.statements[0] {
+        let arg = &p.commands[0].args[1];
+        if let LoweredWordPart::Variable(LoweredVariableRef::Custom { subscript, .. }) =
+            &arg.parts[0]
+        {
+            assert_eq!(subscript, &Some(BashSubscript::Index(-1)));
+        } else {
+            panic!("expected custom variable with negative index");
+        }
+    } else {
+        panic!("expected pipeline");
+    }
+}
+
+#[test]
+fn test_lower_set_global_in_function() {
+    let fish = "function foo\n  set -g bar 1\nend\n";
+    let prog = parse(fish).unwrap();
+    let lowered = lower_program(&prog);
+    if let LoweredStatement::Function(f) = &lowered.statements[0] {
+        if let LoweredStatement::Assignment(AssignmentIR::Global { in_function, .. }) = &f.body[0] {
+            assert!(in_function);
+        } else {
+            panic!("expected global assignment in function");
+        }
+    } else {
+        panic!("expected function");
+    }
+}
+
+#[test]
+fn test_lower_slice_assign_and_erase_negative() {
+    let fish = "set fruit[-1] evil\nset -e fruit[-2]\n";
+    let prog = parse(fish).unwrap();
+    let lowered = lower_program(&prog);
+    if let LoweredStatement::Assignment(AssignmentIR::SliceAssign { name, index, .. }) =
+        &lowered.statements[0]
+    {
+        assert_eq!(name, "fruit");
+        assert_eq!(index, &SliceIndexIR::Negative(-1));
+    } else {
+        panic!("expected SliceAssign");
+    }
+    if let LoweredStatement::Assignment(AssignmentIR::SliceErase { name, index }) =
+        &lowered.statements[1]
+    {
+        assert_eq!(name, "fruit");
+        assert_eq!(index, &SliceIndexIR::Negative(-2));
+    } else {
+        panic!("expected SliceErase");
+    }
+}
