@@ -1,0 +1,26 @@
+---
+source: crates/hook/tests/transpile_test.rs
+expression: result
+---
+if test -f foo.txt; then
+  echo "is file"
+elif test -d foo.txt; then
+  echo "is dir"
+else
+  echo "unknown"
+fi
+case "$target" in
+  prod|production)
+    echo "deploying prod"
+    ;;
+  staging)
+    echo "deploying staging"
+    ;;
+  '*')
+    echo "default"
+    ;;
+esac
+while test "$count" -gt 0; do
+  echo "$count"
+  count="0"
+done

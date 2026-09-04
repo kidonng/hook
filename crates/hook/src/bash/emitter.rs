@@ -164,7 +164,11 @@ fn emit_assignment(assign: &AssignmentIR, out: &mut String) {
         }
         AssignmentIR::Export { name, values } => {
             out.push_str(&format!("export {}=\"", name));
-            if let Some(v) = values.first() {
+            let sep = if name == "PATH" { ":" } else { " " };
+            for (idx, v) in values.iter().enumerate() {
+                if idx > 0 {
+                    out.push_str(sep);
+                }
                 emit_word_inner(v, out);
             }
             out.push('\"');
@@ -320,7 +324,7 @@ pub fn emit_word_part(part: &LoweredWordPart, out: &mut String) {
         LoweredWordPart::DoubleQuoted(parts) => {
             out.push('\"');
             for p in parts {
-                emit_word_part(p, out);
+                emit_word_part_inner(p, out);
             }
             out.push('\"');
         }

@@ -1,0 +1,11 @@
+---
+source: crates/hook/tests/transpile_test.rs
+expression: result
+---
+#!/usr/bin/env bash
+export PATH="$PATH:/opt/bin"
+items=("apple" "banana" "cherry")
+items+=("date")
+echo "${items[0]}"
+echo "${items[$((${#items[@]}-1))]}"
+echo "${items[@]:1:2}"

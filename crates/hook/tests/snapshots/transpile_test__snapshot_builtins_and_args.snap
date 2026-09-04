@@ -1,0 +1,12 @@
+---
+source: crates/hook/tests/transpile_test.rs
+expression: result
+---
+deploy() {
+  local env="$1"
+  local target="$2"
+  if test $? -eq 0; then
+    echo "deploying $1 to ${@:2}"
+  fi
+  echo "exit status: $?"
+}

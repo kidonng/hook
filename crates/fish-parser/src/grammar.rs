@@ -15,7 +15,7 @@ enum FuncOpt {
 peg::parser! {
     pub grammar fish_grammar() for str {
         pub rule program() -> Program
-            = _* shebang:shebang_line()? statements:statement_list() _* ![_] {
+            = statement_sep()? shebang:shebang_line()? statements:statement_list() _* ![_] {
                 Program { shebang, statements }
             }
 
