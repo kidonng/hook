@@ -41,3 +41,8 @@ nix build
 cargo run -p hook -- script.fish
 cat script.fish | cargo run -p hook
 ```
+
+## Documentation and Plans
+
+- Place all design documents, specs, and implementation plans directly in the workspace root directory.
+- Do NOT create or use `docs/superpowers/` or nested documentation directories for plans or specs.
