@@ -73,6 +73,7 @@ pub enum SliceIndexIR {
 pub enum PipeKind {
     Stdout,
     StdoutAndStderr,
+    Fd(u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]

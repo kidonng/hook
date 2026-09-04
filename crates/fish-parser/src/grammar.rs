@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::unescape::*;
 
 #[derive(Debug)]
 enum CommandItem {
@@ -96,11 +97,14 @@ peg::parser! {
         rule cont_space()
             = (_ / ("\\" "\n") / ("#" [^'\n']* "\n") / "\n")*
 
-        rule pipe_op() -> bool
-            = ("&|" / "|&") { true }
-            / "|" { false }
+        rule pipe_op() -> PipeOperator
+            = ("&|" / "|&") { PipeOperator::StdoutAndStderr }
+            / fd:(n:$(['0'..='9']+) { n.parse::<u32>().unwrap() })? ">|" {
+                PipeOperator::Fd(fd.unwrap_or(1))
+            }
+            / "|" { PipeOperator::Stdout }
 
-        rule pipe_sep() -> bool
+        rule pipe_sep() -> PipeOperator
             = _* p:pipe_op() cont_space() { p }
 
         rule negate() -> bool
@@ -110,12 +114,8 @@ peg::parser! {
             = !reserved_keyword() comb:combinator_prefix()? _* negate:negate()? head:command() tail:(sep:pipe_sep() cmd:command() { (sep, cmd) })* bg:(_* "&" !['&' | '>'])? {
                 let mut commands = vec![head];
                 let mut pipe_operators = Vec::new();
-                for (is_merged, next_cmd) in tail {
-                    pipe_operators.push(if is_merged {
-                        PipeOperator::StdoutAndStderr
-                    } else {
-                        PipeOperator::Stdout
-                    });
+                for (op, next_cmd) in tail {
+                    pipe_operators.push(op);
                     commands.push(next_cmd);
                 }
                 if let Some(true) = negate.map(|_| true) {
@@ -162,7 +162,7 @@ peg::parser! {
 
         rule command_item() -> CommandItem
             = r:redirection() { CommandItem::Redir(r) }
-            / w:word() { CommandItem::Arg(w) }
+            / !( (['0'..='9']*) ">|" ) w:word() { CommandItem::Arg(w) }
 
         rule redirection() -> Redirection
             = fd:(n:$(['0'..='9']+) { n.parse::<u32>().unwrap() })? mode:redirect_mode() _* target:word() {
@@ -170,7 +170,8 @@ peg::parser! {
             }
 
         rule redirect_mode() -> RedirectMode
-            = ">>?" { RedirectMode::NoClobberAppend }
+            = ">>&" { RedirectMode::DupOutput }
+            / ">>?" { RedirectMode::NoClobberAppend }
             / ">>" { RedirectMode::Append }
             / ">&" { RedirectMode::DupOutput }
             / "<&" { RedirectMode::DupInput }
@@ -180,7 +181,9 @@ peg::parser! {
             / "<" { RedirectMode::Input }
             / "^^" { RedirectMode::AppendAndErr }
             / "^" { RedirectMode::OutputAndErr }
+            / "&>>?" { RedirectMode::NoClobberAppendAndErr }
             / "&>>" { RedirectMode::AppendAndErr }
+            / "&>?" { RedirectMode::NoClobberOutputAndErr }
             / "&>" { RedirectMode::OutputAndErr }
         rule word() -> Word
             = parts:(word_part()+ ) {
@@ -201,8 +204,8 @@ peg::parser! {
             }
 
         rule single_quoted() -> WordPart
-            = "'" s:$(( [^'\''] / "\\'" )*) "'" {
-                WordPart::SingleQuoted(s.replace("\\'", "'"))
+            = "'" s:$(( "\\'" / "\\\\" / [^'\''] )*) "'" {
+                WordPart::SingleQuoted(unescape_single_quoted(s))
             }
 
         rule double_quoted() -> WordPart
@@ -214,11 +217,14 @@ peg::parser! {
             = variable_ref()
             / dollar_command_subst()
             / s:$(( [^'\"' | '$' | '\\'] / ("\\" [_]) )+) {
-                WordPart::Literal(unescape(s))
+                WordPart::Literal(unescape_double_quoted(s))
             }
 
+        rule var_name() -> String
+            = s:$(['a'..='z' | 'A'..='Z' | '0'..='9' | '_']+) { s.to_string() }
+
         rule variable_ref() -> WordPart
-            = "$" inner:variable_ref() slices:slice()* {
+            = "$" inner:variable_ref() slices:slices() {
                 if let WordPart::Variable(vref) = inner {
                     WordPart::Variable(VariableRef {
                         target: VariableTarget::Indirect(Box::new(vref)),
@@ -228,19 +234,29 @@ peg::parser! {
                     unreachable!()
                 }
             }
-            / "$" name:$(['a'..='z' | 'A'..='Z' | '_']['a'..='z' | 'A'..='Z' | '0'..='9' | '_']*) slices:slice()* {
+            / "$" name:var_name() slices:slices() {
                 WordPart::Variable(VariableRef {
-                    target: VariableTarget::Named(name.to_string()),
+                    target: VariableTarget::Named(name),
                     slices,
                 })
             }
 
-        rule slice() -> Slice
-            = "[" _* start:slice_index()? _* ".." _* end:slice_index()? _* "]" {
+        rule slice_item() -> Slice
+            = start:slice_index()? _* ".." _* end:slice_index()? {
                 Slice::Range { start, end }
             }
-            / "[" _* idx:slice_index() _* "]" {
+            / idx:slice_index() {
                 Slice::Index(idx)
+            }
+
+        rule slice_bracket() -> Vec<Slice>
+            = "[" _* items:(slice_item() ++ (_+)) _* "]" {
+                items
+            }
+
+        rule slices() -> Vec<Slice>
+            = brackets:slice_bracket()* {
+                brackets.into_iter().flatten().collect()
             }
 
         rule slice_index() -> SliceIndex
@@ -254,18 +270,53 @@ peg::parser! {
                 }
             }
         rule dollar_command_subst() -> WordPart
-            = "$(" _* stmts:statement_list() _* ")" slices:slice()* {
+            = "$(" _* stmts:statement_list() _* ")" slices:slices() {
                 WordPart::CommandSubst { statements: stmts, slices }
             }
 
         rule command_subst() -> WordPart
             = dollar_command_subst()
-            / "(" _* stmts:statement_list() _* ")" slices:slice()* {
+            / "(" _* stmts:statement_list() _* ")" slices:slices() {
                 WordPart::CommandSubst { statements: stmts, slices }
             }
+        rule brace_literal() -> WordPart
+            = s:$( ( [^' ' | '\t' | '\n' | ';' | '|' | '&' | '<' | '>' | '^' | '(' | ')' | '{' | '}' | ',' | '$' | '\'' | '\"' | '#'] / ("\\" [_]) )+ ) {
+                WordPart::Literal(unescape(s))
+            }
+
+        rule brace_part() -> WordPart
+            = single_quoted()
+            / double_quoted()
+            / variable_ref()
+            / command_subst()
+            / brace_expansion()
+            / brace_literal()
+
+        rule brace_item() -> Word
+            = parts:(brace_part()* ) {
+                Word { parts }
+            }
+
         rule brace_expansion() -> WordPart
-            = "{" _* words:(word() ** (_* "," _*)) _* "}" {
-                WordPart::BraceExpansion(words)
+            = "{" _* items:(brace_item() ** (_* "," _*)) _* "}" {
+                let has_comma = items.len() > 1;
+                let has_var = items.iter().any(|w| w.parts.iter().any(|p| matches!(p, WordPart::Variable(_))));
+                if has_comma || has_var {
+                    WordPart::BraceExpansion(items)
+                } else {
+                    let inner = if items.is_empty() {
+                        String::new()
+                    } else {
+                        items.iter().map(|w| {
+                            w.parts.iter().map(|p| match p {
+                                WordPart::Literal(s) => s.clone(),
+                                WordPart::SingleQuoted(s) => format!("'{}'", s),
+                                _ => String::new(),
+                            }).collect::<String>()
+                        }).collect::<Vec<_>>().join(",")
+                    };
+                    WordPart::Literal(format!("{{{}}}", inner))
+                }
             }
 
         rule if_stmt() -> Statement
@@ -296,10 +347,11 @@ peg::parser! {
         rule switch_stmt() -> Statement
             = "switch" !keyword_char() _+ val:word() statement_sep()
               cases:case_clause()*
-              "end" !keyword_char() {
+              "end" !keyword_char() redirs:(_* r:redirection() { r })* {
                 Statement::Switch(SwitchStatement {
                     value: val,
                     cases,
+                    redirections: redirs,
                 })
             }
 
@@ -310,11 +362,11 @@ peg::parser! {
             }
 
         rule for_stmt() -> Statement
-            = "for" !keyword_char() _+ var:$(['a'..='z' | 'A'..='Z' | '_']['a'..='z' | 'A'..='Z' | '0'..='9' | '_']*) _+ "in" !keyword_char() _+ vals:(word() ++ (_+)) statement_sep()
+            = "for" !keyword_char() _+ var:var_name() _+ "in" !keyword_char() vals:(_+ w:word() { w })* statement_sep()
               body:statement_list()
               "end" !keyword_char() redirs:(_* r:redirection() { r })* {
                 Statement::For(ForStatement {
-                    variable: var.to_string(),
+                    variable: var,
                     values: vals,
                     body,
                     redirections: redirs,
@@ -363,26 +415,6 @@ peg::parser! {
                 })
             }
     }
-}
-
-fn unescape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(next) = chars.next() {
-                match next {
-                    'n' => out.push('\n'),
-                    't' => out.push('\t'),
-                    'r' => out.push('\r'),
-                    _ => out.push(next),
-                }
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }
 
 pub fn parse(input: &str) -> Result<Program, peg::error::ParseError<peg::str::LineCol>> {

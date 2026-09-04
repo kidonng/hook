@@ -1,6 +1,6 @@
 pub mod ast;
 pub mod grammar;
-
+pub mod unescape;
 pub use ast::*;
 pub use grammar::parse;
 pub use peg::error::ParseError;

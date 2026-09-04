@@ -138,6 +138,7 @@ pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
         .map(|op| match op {
             PipeOperator::Stdout => PipeKind::Stdout,
             PipeOperator::StdoutAndStderr => PipeKind::StdoutAndStderr,
+            PipeOperator::Fd(fd) => PipeKind::Fd(*fd),
         })
         .collect();
     LoweredPipeline {

@@ -338,6 +338,7 @@ fn emit_pipeline_commands(p: &LoweredPipeline, out: &mut String) {
             match pipe_op {
                 PipeKind::Stdout => out.push_str(" | "),
                 PipeKind::StdoutAndStderr => out.push_str(" |& "),
+                PipeKind::Fd(fd) => out.push_str(&format!(" {}| ", fd)),
             }
         }
         emit_command(cmd, out);
@@ -439,6 +440,12 @@ fn emit_redirection(r: &LoweredRedirection, out: &mut String) {
         RedirectMode::NoClobberAppend => {
             out.push_str(">>");
             out.push(' ');
+        }
+        RedirectMode::NoClobberOutputAndErr => {
+            out.push_str("&> ");
+        }
+        RedirectMode::NoClobberAppendAndErr => {
+            out.push_str("&>> ");
         }
     }
     emit_word(&r.target, out);

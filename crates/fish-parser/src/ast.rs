@@ -25,6 +25,7 @@ pub enum Statement {
 pub enum PipeOperator {
     Stdout,
     StdoutAndStderr,
+    Fd(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -149,6 +150,8 @@ pub enum RedirectMode {
     SafeInput,
     NoClobberOutput,
     NoClobberAppend,
+    NoClobberOutputAndErr,
+    NoClobberAppendAndErr,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -164,6 +167,7 @@ pub struct IfStatement {
 pub struct SwitchStatement {
     pub value: Word,
     pub cases: Vec<CaseClause>,
+    pub redirections: Vec<Redirection>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
