@@ -20,13 +20,13 @@ pub fn lower_count(c: &Command, scope: &Scope) -> Option<LoweredCommand> {
 
             return if has_dev_null_redir {
                 Some(LoweredCommand {
-                    negate: c.negate,
+                    assignments: vec![],
                     args: words!["[", expr, "-gt", "0", "]"],
                     redirections: vec![],
                 })
             } else {
                 Some(LoweredCommand {
-                    negate: c.negate,
+                    assignments: vec![],
                     args: words!["printf", "'%s\\n'", expr],
                     redirections: c
                         .redirections
@@ -39,13 +39,13 @@ pub fn lower_count(c: &Command, scope: &Scope) -> Option<LoweredCommand> {
     } else if c.args.len() == 1 {
         return if has_dev_null_redir {
             Some(LoweredCommand {
-                negate: c.negate,
+                assignments: vec![],
                 args: words!["[", "0", "-gt", "0", "]"],
                 redirections: vec![],
             })
         } else {
             Some(LoweredCommand {
-                negate: c.negate,
+                assignments: vec![],
                 args: words!["printf", "'%s\\n'", "0"],
                 redirections: c
                     .redirections
@@ -59,7 +59,7 @@ pub fn lower_count(c: &Command, scope: &Scope) -> Option<LoweredCommand> {
     if has_dev_null_redir {
         let count_str = (c.args.len() - 1).to_string();
         Some(LoweredCommand {
-            negate: c.negate,
+            assignments: vec![],
             args: words!["[", count_str, "-gt", "0", "]"],
             redirections: vec![],
         })
@@ -70,7 +70,7 @@ pub fn lower_count(c: &Command, scope: &Scope) -> Option<LoweredCommand> {
         sub_args.push_words("; printf '%s\\n' \"$#\")");
 
         Some(LoweredCommand {
-            negate: c.negate,
+            assignments: vec![],
             args: sub_args.into_vec(),
             redirections: c
                 .redirections

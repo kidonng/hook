@@ -41,11 +41,12 @@ fn test_lower_psub_detection() {
     let lowered = lower_program(&prog);
     match &lowered.statements[0] {
         LoweredStatement::Pipeline(p) => {
-            let arg1 = &p.commands[0].args[1];
+            let cmds = p.commands();
+            let arg1 = &cmds[0].args[1];
             match &arg1.parts[0] {
                 LoweredWordPart::ProcessSubst(pipeline) => {
-                    assert_eq!(pipeline.commands.len(), 1);
-                    assert_eq!(pipeline.commands[0].args[0].as_literal(), Some("sort"));
+                    assert_eq!(pipeline.commands().len(), 1);
+                    assert_eq!(pipeline.commands()[0].args[0].as_literal(), Some("sort"));
                 }
                 _ => panic!("expected ProcessSubst"),
             }
@@ -61,7 +62,8 @@ fn test_lower_builtin_vars_and_slices() {
     let lowered = lower_program(&prog);
     match &lowered.statements[0] {
         LoweredStatement::Pipeline(p) => {
-            let args = &p.commands[0].args;
+            let cmds = p.commands();
+            let args = &cmds[0].args;
             assert_eq!(args.len(), 8);
             assert_eq!(
                 args[1].parts[0],
@@ -111,7 +113,7 @@ fn test_lower_merged_pipe_modern() {
     if let LoweredStatement::Pipeline(p) = stmt {
         assert_eq!(p.pipe_operators, vec![PipeKind::StdoutAndStderr]);
         assert!(
-            p.commands[0].redirections.is_empty(),
+            p.commands()[0].redirections.is_empty(),
             "should not synthesize 2>&1 redirection"
         );
     } else {
@@ -125,7 +127,7 @@ fn test_lower_negative_slice_modern() {
     let prog = parse(fish).unwrap();
     let lowered = lower_program(&prog);
     if let LoweredStatement::Pipeline(p) = &lowered.statements[0] {
-        let arg = &p.commands[0].args[1];
+        let arg = &p.commands()[0].args[1];
         if let LoweredWordPart::Variable(LoweredVariableRef::Custom { subscript, .. }) =
             &arg.parts[0]
         {

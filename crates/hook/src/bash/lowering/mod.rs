@@ -32,11 +32,12 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
         Statement::Continue => LoweredStatement::Continue,
         Statement::Pipeline(p) => {
             // Check if this pipeline is a `set` assignment command
-            if p.commands.len() == 1 {
-                let cmd = &p.commands[0];
-                if let Some("set") = cmd.args.first().and_then(|w| w.as_single_literal()) {
-                    if let Some(assign) = builtins::set::lower_set_assignment(cmd, scope) {
-                        return LoweredStatement::Assignment(assign);
+            if p.elements.len() == 1 {
+                if let PipelineElement::Command(cmd) = &p.elements[0] {
+                    if let Some("set") = cmd.args.first().and_then(|w| w.as_single_literal()) {
+                        if let Some(assign) = builtins::set::lower_set_assignment(cmd, scope) {
+                            return LoweredStatement::Assignment(assign);
+                        }
                     }
                 }
             }
@@ -130,8 +131,17 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
 }
 
 pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
-    let commands: Vec<LoweredCommand> =
-        p.commands.iter().map(|c| lower_command(c, scope)).collect();
+    let mut scope_mut = *scope;
+    let elements: Vec<LoweredPipelineElement> = p
+        .elements
+        .iter()
+        .map(|el| match el {
+            PipelineElement::Command(c) => LoweredPipelineElement::Command(lower_command(c, scope)),
+            PipelineElement::Block(b) => {
+                LoweredPipelineElement::Block(lower_statement(b, &mut scope_mut))
+            }
+        })
+        .collect();
     let pipe_operators: Vec<PipeKind> = p
         .pipe_operators
         .iter()
@@ -142,7 +152,8 @@ pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
         })
         .collect();
     LoweredPipeline {
-        commands,
+        negate: p.negate,
+        elements,
         pipe_operators,
         combinator: p.combinator,
         background: p.background,
@@ -154,8 +165,17 @@ pub fn lower_command(c: &Command, scope: &Scope) -> LoweredCommand {
         return lowered;
     }
 
+    let assignments = c
+        .assignments
+        .iter()
+        .map(|a| LoweredVariableAssignment {
+            name: a.name.clone(),
+            value: lower_word(&a.value, scope),
+        })
+        .collect();
+
     LoweredCommand {
-        negate: c.negate,
+        assignments,
         args: c.args.iter().map(|w| lower_word(w, scope)).collect(),
         redirections: c
             .redirections
@@ -191,14 +211,14 @@ pub fn lower_word_part(part: &WordPart, scope: &Scope) -> LoweredWordPart {
             // Check for process substitution: single pipeline ending in `psub` and no slices
             if slices.is_empty() && statements.len() == 1 {
                 if let Statement::Pipeline(p) = &statements[0] {
-                    if let Some(last_cmd) = p.commands.last() {
+                    if let Some(PipelineElement::Command(last_cmd)) = p.elements.last() {
                         if let Some("psub") =
                             last_cmd.args.first().and_then(|w| w.as_single_literal())
                         {
                             // Strip terminal psub
                             let mut stripped_pipeline = p.clone();
-                            stripped_pipeline.commands.pop();
-                            if !stripped_pipeline.commands.is_empty() {
+                            stripped_pipeline.elements.pop();
+                            if !stripped_pipeline.elements.is_empty() {
                                 return LoweredWordPart::ProcessSubst(lower_pipeline(
                                     &stripped_pipeline,
                                     scope,

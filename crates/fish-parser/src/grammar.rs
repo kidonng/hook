@@ -23,7 +23,7 @@ peg::parser! {
             = statement_sep()? stmts:(s:statement() ** statement_sep()) statement_sep()? {
                 stmts.into_iter().flatten().filter(|s| match s {
                     Statement::Comment(_) => true,
-                    Statement::Pipeline(p) => !p.commands.is_empty(),
+                    Statement::Pipeline(p) => !p.elements.is_empty(),
                     _ => true,
                 }).collect()
             }
@@ -52,6 +52,7 @@ peg::parser! {
             / s:return_stmt() { vec![s] }
             / s:break_stmt() { vec![s] }
             / s:continue_stmt() { vec![s] }
+            / pipeline_stmt()
             / s:if_stmt() { vec![s] }
             / s:switch_stmt() { vec![s] }
             / s:for_stmt() { vec![s] }
@@ -59,7 +60,6 @@ peg::parser! {
             / s:function_stmt() { vec![s] }
             / s:begin_stmt() { vec![s] }
             / s:compound_block_stmt() { vec![s] }
-            / pipeline_stmt()
         rule comment() -> Statement
             = "#" s:$((!['\n'][_])*) {
                 Statement::Comment(s.to_string())
@@ -110,21 +110,50 @@ peg::parser! {
         rule negate() -> bool
             = ("not" !keyword_char() _+ / "!" _*) { true }
 
+        rule bg_separator()
+            = &[' ' | '\t' | '\n' | ';' | '<' | '>' | '&' | '|'] / ![_]
+
+        rule bg_flag() -> bool
+            = _* "&" !['&' | '>'] bg_separator() { true }
+
+        rule block_element() -> Statement
+            = s:if_stmt() { s }
+            / s:switch_stmt() { s }
+            / s:for_stmt() { s }
+            / s:while_stmt() { s }
+            / s:begin_stmt() { s }
+            / s:compound_block_stmt() { s }
+
+        rule pipeline_element() -> PipelineElement
+            = b:block_element() { PipelineElement::Block(b) }
+            / c:command() { PipelineElement::Command(c) }
+
         rule pipeline() -> Pipeline
-            = !reserved_keyword() comb:combinator_prefix()? _* negate:negate()? head:command() tail:(sep:pipe_sep() cmd:command() { (sep, cmd) })* bg:(_* "&" !['&' | '>'])? {
-                let mut commands = vec![head];
+            = !block_terminator() comb:combinator_prefix()? _* negate:negate()? head:block_element() tail:(sep:pipe_sep() el:pipeline_element() { (sep, el) })+ bg:bg_flag()? {
+                let mut elements = vec![PipelineElement::Block(head)];
                 let mut pipe_operators = Vec::new();
-                for (op, next_cmd) in tail {
+                for (op, next_el) in tail {
                     pipe_operators.push(op);
-                    commands.push(next_cmd);
-                }
-                if let Some(true) = negate.map(|_| true) {
-                    if let Some(first) = commands.first_mut() {
-                        first.negate = true;
-                    }
+                    elements.push(next_el);
                 }
                 Pipeline {
-                    commands,
+                    negate: negate.unwrap_or(false),
+                    elements,
+                    pipe_operators,
+                    combinator: comb.unwrap_or(Combinator::None),
+                    background: bg.is_some(),
+                }
+            }
+            / !block_terminator() comb:combinator_prefix()? _* negate:negate()? head:command() tail:(sep:pipe_sep() el:pipeline_element() { (sep, el) })* bg:bg_flag()? {
+                let mut elements = vec![PipelineElement::Command(head)];
+                let mut pipe_operators = Vec::new();
+                for (op, next_el) in tail {
+                    pipe_operators.push(op);
+                    elements.push(next_el);
+                }
+                Pipeline {
+                    negate: negate.unwrap_or(false),
+                    elements,
                     pipe_operators,
                     combinator: comb.unwrap_or(Combinator::None),
                     background: bg.is_some(),
@@ -143,8 +172,30 @@ peg::parser! {
         rule cmd_arg_sep()
             = (_ / line_cont())+
 
+        rule variable_assignment() -> VariableAssignment
+            = name:var_name() "=" val:word() {
+                VariableAssignment { name, value: val }
+            }
+
         rule command() -> Command
-            = items:(command_item() ++ cmd_arg_sep()) {
+            = !reserved_keyword() assigns:(a:variable_assignment() ++ cmd_arg_sep()) rest:(cmd_arg_sep() items:(command_item() ++ cmd_arg_sep()) { items })? {
+                let mut args = Vec::new();
+                let mut redirections = Vec::new();
+                if let Some(items) = rest {
+                    for item in items {
+                        match item {
+                            CommandItem::Arg(w) => args.push(w),
+                            CommandItem::Redir(r) => redirections.push(r),
+                        }
+                    }
+                }
+                Command {
+                    assignments: assigns,
+                    args,
+                    redirections,
+                }
+            }
+            / !reserved_keyword() items:(command_item() ++ cmd_arg_sep()) {
                 let mut args = Vec::new();
                 let mut redirections = Vec::new();
                 for item in items {
@@ -154,7 +205,7 @@ peg::parser! {
                     }
                 }
                 Command {
-                    negate: false,
+                    assignments: vec![],
                     args,
                     redirections,
                 }
@@ -199,7 +250,7 @@ peg::parser! {
             / literal()
 
         rule literal() -> WordPart
-            = s:$( ( [^' ' | '\t' | '\n' | ';' | '|' | '&' | '<' | '>' | '^' | '(' | ')' | '{' | '}' | '$' | '\'' | '\"' | '#'] / ("\\" [_]) )+ ) {
+            = s:$( ( [^' ' | '\t' | '\n' | ';' | '|' | '&' | '<' | '>' | '^' | '(' | ')' | '{' | '}' | '$' | '\'' | '\"' | '#'] / ("&" !bg_separator()) / ("\\" [_]) )+ ) {
                 WordPart::Literal(unescape(s))
             }
 

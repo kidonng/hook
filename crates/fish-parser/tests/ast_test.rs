@@ -5,8 +5,9 @@ fn test_ast_serialization() {
     let program = Program {
         shebang: Some("#!/usr/bin/env fish".to_string()),
         statements: vec![Statement::Pipeline(Pipeline {
-            commands: vec![Command {
-                negate: false,
+            negate: false,
+            elements: vec![PipelineElement::Command(Command {
+                assignments: vec![],
                 args: vec![
                     Word {
                         parts: vec![WordPart::Literal("echo".to_string())],
@@ -19,7 +20,7 @@ fn test_ast_serialization() {
                     },
                 ],
                 redirections: vec![],
-            }],
+            })],
             pipe_operators: vec![],
             combinator: Combinator::None,
             background: false,

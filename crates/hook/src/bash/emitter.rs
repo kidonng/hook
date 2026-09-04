@@ -61,7 +61,10 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
                     Combinator::Or => out.push_str(" || "),
                     Combinator::None => {}
                 }
-                emit_pipeline_commands(p, out);
+                if p.negate {
+                    out.push_str("! ");
+                }
+                emit_pipeline_elements(p, out);
                 out.push('\n');
             } else {
                 out.push_str(&pad);
@@ -323,12 +326,15 @@ fn emit_pipeline_chain(pipelines: &[LoweredPipeline], out: &mut String) {
                 Combinator::None => out.push_str("; "),
             }
         }
-        emit_pipeline_commands(p, out);
+        if p.negate {
+            out.push_str("! ");
+        }
+        emit_pipeline_elements(p, out);
     }
 }
 
-fn emit_pipeline_commands(p: &LoweredPipeline, out: &mut String) {
-    for (idx, cmd) in p.commands.iter().enumerate() {
+fn emit_pipeline_elements(p: &LoweredPipeline, out: &mut String) {
+    for (idx, el) in p.elements.iter().enumerate() {
         if idx > 0 {
             let pipe_op = p
                 .pipe_operators
@@ -341,7 +347,29 @@ fn emit_pipeline_commands(p: &LoweredPipeline, out: &mut String) {
                 PipeKind::Fd(fd) => out.push_str(&format!(" {}| ", fd)),
             }
         }
-        emit_command(cmd, out);
+        match el {
+            LoweredPipelineElement::Command(cmd) => emit_command(cmd, out),
+            LoweredPipelineElement::Block(stmt) => match stmt {
+                LoweredStatement::BeginBlock(b) => {
+                    out.push_str("{\n");
+                    for s in &b.body {
+                        emit_statement(s, 1, out);
+                    }
+                    if !out.ends_with('\n') {
+                        out.push('\n');
+                    }
+                    out.push('}');
+                }
+                _ => {
+                    out.push_str("{\n");
+                    emit_statement(stmt, 1, out);
+                    if !out.ends_with('\n') {
+                        out.push('\n');
+                    }
+                    out.push('}');
+                }
+            },
+        }
     }
     if p.background {
         out.push_str(" &");
@@ -354,7 +382,10 @@ fn emit_pipeline(p: &LoweredPipeline, out: &mut String) {
         Combinator::Or => out.push_str("|| "),
         Combinator::None => {}
     }
-    emit_pipeline_commands(p, out);
+    if p.negate {
+        out.push_str("! ");
+    }
+    emit_pipeline_elements(p, out);
 }
 
 fn emit_command_subst_slices(slices: &[Slice], out: &mut String) {
@@ -385,8 +416,11 @@ fn emit_command_subst_slices(slices: &[Slice], out: &mut String) {
 }
 
 fn emit_command(cmd: &LoweredCommand, out: &mut String) {
-    if cmd.negate {
-        out.push_str("! ");
+    for assign in &cmd.assignments {
+        out.push_str(&assign.name);
+        out.push('=');
+        emit_word(&assign.value, out);
+        out.push(' ');
     }
     for (idx, arg) in cmd.args.iter().enumerate() {
         if idx > 0 {

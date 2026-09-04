@@ -75,18 +75,48 @@ pub enum PipeKind {
     StdoutAndStderr,
     Fd(u32),
 }
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoweredVariableAssignment {
+    pub name: String,
+    pub value: LoweredWord,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoweredPipelineElement {
+    Command(LoweredCommand),
+    Block(LoweredStatement),
+}
+
+impl From<LoweredCommand> for LoweredPipelineElement {
+    fn from(cmd: LoweredCommand) -> Self {
+        Self::Command(cmd)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredPipeline {
-    pub commands: Vec<LoweredCommand>,
+    pub negate: bool,
+    pub elements: Vec<LoweredPipelineElement>,
     pub pipe_operators: Vec<PipeKind>,
     pub combinator: Combinator,
     pub background: bool,
 }
 
+impl LoweredPipeline {
+    pub fn commands(&self) -> Vec<&LoweredCommand> {
+        self.elements
+            .iter()
+            .filter_map(|el| match el {
+                LoweredPipelineElement::Command(c) => Some(c),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredCommand {
-    pub negate: bool,
+    pub assignments: Vec<LoweredVariableAssignment>,
     pub args: Vec<LoweredWord>,
     pub redirections: Vec<LoweredRedirection>,
 }
@@ -255,7 +285,8 @@ mod tests {
     #[test]
     fn test_modern_ir_pipe_and_subscripts() {
         let pipeline = LoweredPipeline {
-            commands: vec![],
+            negate: false,
+            elements: vec![],
             pipe_operators: vec![PipeKind::StdoutAndStderr],
             combinator: Combinator::None,
             background: false,

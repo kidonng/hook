@@ -27,13 +27,43 @@ pub enum PipeOperator {
     StdoutAndStderr,
     Fd(u32),
 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VariableAssignment {
+    pub name: String,
+    pub value: Word,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PipelineElement {
+    Command(Command),
+    Block(Statement),
+}
+
+impl From<Command> for PipelineElement {
+    fn from(cmd: Command) -> Self {
+        Self::Command(cmd)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pipeline {
-    pub commands: Vec<Command>,
+    pub negate: bool,
+    pub elements: Vec<PipelineElement>,
     pub pipe_operators: Vec<PipeOperator>,
     pub combinator: Combinator,
     pub background: bool,
+}
+
+impl Pipeline {
+    pub fn commands(&self) -> Vec<&Command> {
+        self.elements
+            .iter()
+            .filter_map(|el| match el {
+                PipelineElement::Command(c) => Some(c),
+                _ => None,
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,11 +75,10 @@ pub enum Combinator {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Command {
-    pub negate: bool,
+    pub assignments: Vec<VariableAssignment>,
     pub args: Vec<Word>,
     pub redirections: Vec<Redirection>,
 }
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Word {
     pub parts: Vec<WordPart>,

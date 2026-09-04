@@ -37,7 +37,7 @@ pub fn lower_contains(c: &Command, scope: &Scope) -> Option<LoweredCommand> {
         Some(n) => n,
         None => {
             return Some(LoweredCommand {
-                negate: c.negate,
+                assignments: vec![],
                 args: words!["(exit", "1)"],
                 redirections: vec![],
             });
@@ -85,7 +85,7 @@ pub fn lower_contains(c: &Command, scope: &Scope) -> Option<LoweredCommand> {
     }
 
     Some(LoweredCommand {
-        negate: c.negate,
+        assignments: vec![],
         args: builder.into_vec(),
         redirections: c
             .redirections

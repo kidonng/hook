@@ -173,13 +173,13 @@ pub fn lower_set_query(cmd: &Command) -> Option<LoweredCommand> {
     let var = query_var?;
     if var == "argv[-1]" || var == "argv" {
         Some(LoweredCommand {
-            negate: cmd.negate,
+            assignments: vec![],
             args: words!["[", "$#", "-gt", "0", "]"],
             redirections: vec![],
         })
     } else {
         Some(LoweredCommand {
-            negate: cmd.negate,
+            assignments: vec![],
             args: words!["[", "-n", format!("\"${{{}:-}}\"", var), "]"],
             redirections: vec![],
         })

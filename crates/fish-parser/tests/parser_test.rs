@@ -9,8 +9,8 @@ fn test_parse_shebang_and_simple_command() {
     assert_eq!(program.statements.len(), 1);
     match &program.statements[0] {
         Statement::Pipeline(p) => {
-            assert_eq!(p.commands.len(), 1);
-            let cmd = &p.commands[0];
+            assert_eq!(p.commands().len(), 1);
+            let cmd = &p.commands()[0];
             assert_eq!(cmd.args[0].as_single_literal(), Some("echo"));
             assert_eq!(
                 cmd.args[1].parts,
@@ -27,7 +27,7 @@ fn test_parse_variables_and_slices() {
     let program = parse(input).expect("parsing failed");
     match &program.statements[0] {
         Statement::Pipeline(p) => {
-            let args = &p.commands[0].args;
+            let args = &p.commands()[0].args;
             assert_eq!(args.len(), 5);
             // $status
             assert_eq!(
@@ -75,7 +75,7 @@ fn test_parse_command_substitution_and_psub() {
     let program = parse(input).expect("parsing failed");
     match &program.statements[0] {
         Statement::Pipeline(p) => {
-            let args = &p.commands[0].args;
+            let args = &p.commands()[0].args;
             assert_eq!(args.len(), 3);
             match &args[1].parts[0] {
                 WordPart::CommandSubst { statements, .. } => {
@@ -145,7 +145,7 @@ echo $argv |
     assert_eq!(program.statements.len(), 1);
     match &program.statements[0] {
         Statement::Pipeline(p) => {
-            assert_eq!(p.commands.len(), 3);
+            assert_eq!(p.commands().len(), 3);
         }
         _ => panic!("expected pipeline"),
     }
@@ -203,7 +203,7 @@ fn test_parse_double_quoted_command_substitution_rules() {
     let p1 = parse("echo \"$(pwd)\"\n").unwrap();
     let stmt1 = &p1.statements[0];
     if let Statement::Pipeline(pipe) = stmt1 {
-        let arg = &pipe.commands[0].args[1];
+        let arg = &pipe.commands()[0].args[1];
         if let WordPart::DoubleQuoted(parts) = &arg.parts[0] {
             assert!(matches!(parts[0], WordPart::CommandSubst { .. }));
         } else {
@@ -217,7 +217,7 @@ fn test_parse_double_quoted_command_substitution_rules() {
     let p2 = parse("echo \"(pwd)\"\n").unwrap();
     let stmt2 = &p2.statements[0];
     if let Statement::Pipeline(pipe) = stmt2 {
-        let arg = &pipe.commands[0].args[1];
+        let arg = &pipe.commands()[0].args[1];
         if let WordPart::DoubleQuoted(parts) = &arg.parts[0] {
             assert_eq!(parts[0], WordPart::Literal("(pwd)".to_string()));
         } else {
@@ -234,7 +234,7 @@ fn test_parse_merged_pipes() {
         let program = parse(input).unwrap();
         assert_eq!(program.statements.len(), 1);
         if let Statement::Pipeline(pipe) = &program.statements[0] {
-            assert_eq!(pipe.commands.len(), 2);
+            assert_eq!(pipe.commands().len(), 2);
             assert_eq!(pipe.pipe_operators, vec![PipeOperator::StdoutAndStderr]);
         } else {
             panic!("expected pipeline");
@@ -302,7 +302,7 @@ end
 fn test_parse_dynamic_variable_slice_index() {
     let program = parse("echo $letters[$index]\necho $letters[$start..$end]\n").unwrap();
     if let Statement::Pipeline(p) = &program.statements[0] {
-        let arg = &p.commands[0].args[1];
+        let arg = &p.commands()[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
             assert_eq!(v.name(), Some("letters"));
             assert_eq!(v.slices.len(), 1);
@@ -312,7 +312,7 @@ fn test_parse_dynamic_variable_slice_index() {
         }
     }
     if let Statement::Pipeline(p) = &program.statements[1] {
-        let arg = &p.commands[0].args[1];
+        let arg = &p.commands()[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
             assert_eq!(v.name(), Some("letters"));
             assert_eq!(v.slices.len(), 1);
@@ -334,7 +334,7 @@ fn test_parse_indirect_variable() {
     let program = parse("echo $$var\n").unwrap();
     assert_eq!(program.statements.len(), 1);
     if let Statement::Pipeline(p) = &program.statements[0] {
-        let arg = &p.commands[0].args[1];
+        let arg = &p.commands()[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
             assert!(matches!(v.target, VariableTarget::Indirect(_)));
         } else {
@@ -348,7 +348,7 @@ fn test_parse_safe_and_noclobber_redirections() {
     let p1 = parse("cat <?input.txt\n").unwrap();
     if let Statement::Pipeline(pipe) = &p1.statements[0] {
         assert_eq!(
-            pipe.commands[0].redirections[0].mode,
+            pipe.commands()[0].redirections[0].mode,
             RedirectMode::SafeInput
         );
     }
@@ -356,16 +356,16 @@ fn test_parse_safe_and_noclobber_redirections() {
     let p2 = parse("echo hello >?output.txt\n").unwrap();
     if let Statement::Pipeline(pipe) = &p2.statements[0] {
         assert_eq!(
-            pipe.commands[0].redirections[0].mode,
+            pipe.commands()[0].redirections[0].mode,
             RedirectMode::NoClobberOutput
         );
     }
 
     let p3 = parse("echo err 2>?err.txt\n").unwrap();
     if let Statement::Pipeline(pipe) = &p3.statements[0] {
-        assert_eq!(pipe.commands[0].redirections[0].fd, Some(2));
+        assert_eq!(pipe.commands()[0].redirections[0].fd, Some(2));
         assert_eq!(
-            pipe.commands[0].redirections[0].mode,
+            pipe.commands()[0].redirections[0].mode,
             RedirectMode::NoClobberOutput
         );
     }
@@ -382,11 +382,11 @@ fn test_parse_single_quoted_escapes() {
     let p = parse("echo 'a\\\\b' 'a\\'b'\n").unwrap();
     if let Statement::Pipeline(pipe) = &p.statements[0] {
         assert_eq!(
-            pipe.commands[0].args[1].parts[0],
+            pipe.commands()[0].args[1].parts[0],
             WordPart::SingleQuoted("a\\b".to_string())
         );
         assert_eq!(
-            pipe.commands[0].args[2].parts[0],
+            pipe.commands()[0].args[2].parts[0],
             WordPart::SingleQuoted("a'b".to_string())
         );
     }
@@ -397,19 +397,19 @@ fn test_parse_double_quoted_escapes() {
     let p = parse("echo \"a\\nb\" \"a\\\"b\" \"a\\$b\" \"a\\\\b\"\n").unwrap();
     if let Statement::Pipeline(pipe) = &p.statements[0] {
         assert_eq!(
-            pipe.commands[0].args[1].parts[0],
+            pipe.commands()[0].args[1].parts[0],
             WordPart::DoubleQuoted(vec![WordPart::Literal("a\\nb".to_string())])
         );
         assert_eq!(
-            pipe.commands[0].args[2].parts[0],
+            pipe.commands()[0].args[2].parts[0],
             WordPart::DoubleQuoted(vec![WordPart::Literal("a\"b".to_string())])
         );
         assert_eq!(
-            pipe.commands[0].args[3].parts[0],
+            pipe.commands()[0].args[3].parts[0],
             WordPart::DoubleQuoted(vec![WordPart::Literal("a$b".to_string())])
         );
         assert_eq!(
-            pipe.commands[0].args[4].parts[0],
+            pipe.commands()[0].args[4].parts[0],
             WordPart::DoubleQuoted(vec![WordPart::Literal("a\\b".to_string())])
         );
     }
@@ -420,27 +420,27 @@ fn test_parse_unquoted_escapes() {
     let p = parse("echo \\e \\a \\f \\v \\x41 \\u0041\n").unwrap();
     if let Statement::Pipeline(pipe) = &p.statements[0] {
         assert_eq!(
-            pipe.commands[0].args[1].parts[0],
+            pipe.commands()[0].args[1].parts[0],
             WordPart::Literal("\x1b".to_string())
         );
         assert_eq!(
-            pipe.commands[0].args[2].parts[0],
+            pipe.commands()[0].args[2].parts[0],
             WordPart::Literal("\x07".to_string())
         );
         assert_eq!(
-            pipe.commands[0].args[3].parts[0],
+            pipe.commands()[0].args[3].parts[0],
             WordPart::Literal("\x0c".to_string())
         );
         assert_eq!(
-            pipe.commands[0].args[4].parts[0],
+            pipe.commands()[0].args[4].parts[0],
             WordPart::Literal("\x0b".to_string())
         );
         assert_eq!(
-            pipe.commands[0].args[5].parts[0],
+            pipe.commands()[0].args[5].parts[0],
             WordPart::Literal("A".to_string())
         );
         assert_eq!(
-            pipe.commands[0].args[6].parts[0],
+            pipe.commands()[0].args[6].parts[0],
             WordPart::Literal("A".to_string())
         );
     }
@@ -451,11 +451,11 @@ fn test_parse_numeric_variables() {
     let p = parse("echo $1 $123\n").unwrap();
     if let Statement::Pipeline(pipe) = &p.statements[0] {
         assert_eq!(
-            pipe.commands[0].args[1].parts[0],
+            pipe.commands()[0].args[1].parts[0],
             WordPart::Variable(VariableRef::new_named("1", vec![]))
         );
         assert_eq!(
-            pipe.commands[0].args[2].parts[0],
+            pipe.commands()[0].args[2].parts[0],
             WordPart::Variable(VariableRef::new_named("123", vec![]))
         );
     }
@@ -467,7 +467,7 @@ fn test_parse_brace_expansion_and_literal_braces() {
     if let Statement::Pipeline(pipe) = &p.statements[0] {
         // HEAD@{2}
         assert_eq!(
-            pipe.commands[0].args[1].parts,
+            pipe.commands()[0].args[1].parts,
             vec![
                 WordPart::Literal("HEAD@".to_string()),
                 WordPart::Literal("{2}".to_string())
@@ -475,7 +475,7 @@ fn test_parse_brace_expansion_and_literal_braces() {
         );
         // foo-{}
         assert_eq!(
-            pipe.commands[0].args[2].parts,
+            pipe.commands()[0].args[2].parts,
             vec![
                 WordPart::Literal("foo-".to_string()),
                 WordPart::Literal("{}".to_string())
@@ -483,12 +483,12 @@ fn test_parse_brace_expansion_and_literal_braces() {
         );
         // {a}
         assert_eq!(
-            pipe.commands[0].args[3].parts,
+            pipe.commands()[0].args[3].parts,
             vec![WordPart::Literal("{a}".to_string())]
         );
         // {a,b}
         assert_eq!(
-            pipe.commands[0].args[4].parts,
+            pipe.commands()[0].args[4].parts,
             vec![WordPart::BraceExpansion(vec![
                 Word::from_literal("a"),
                 Word::from_literal("b")
@@ -496,7 +496,7 @@ fn test_parse_brace_expansion_and_literal_braces() {
         );
         // {/usr,}/bin
         assert_eq!(
-            pipe.commands[0].args[5].parts,
+            pipe.commands()[0].args[5].parts,
             vec![
                 WordPart::BraceExpansion(vec![Word::from_literal("/usr"), Word { parts: vec![] }]),
                 WordPart::Literal("/bin".to_string())
@@ -504,7 +504,7 @@ fn test_parse_brace_expansion_and_literal_braces() {
         );
         // {,,/usr}
         assert_eq!(
-            pipe.commands[0].args[6].parts,
+            pipe.commands()[0].args[6].parts,
             vec![WordPart::BraceExpansion(vec![
                 Word { parts: vec![] },
                 Word { parts: vec![] },
@@ -513,7 +513,7 @@ fn test_parse_brace_expansion_and_literal_braces() {
         );
         // {$foo}dog
         assert_eq!(
-            pipe.commands[0].args[7].parts,
+            pipe.commands()[0].args[7].parts,
             vec![
                 WordPart::BraceExpansion(vec![Word {
                     parts: vec![WordPart::Variable(VariableRef::new_named("foo", vec![]))]
@@ -551,7 +551,7 @@ fn test_parse_switch_redirections() {
 fn test_parse_fd_pipe() {
     let p = parse("make fish 2>| less\n").unwrap();
     if let Statement::Pipeline(pipe) = &p.statements[0] {
-        assert_eq!(pipe.commands.len(), 2);
+        assert_eq!(pipe.commands().len(), 2);
         assert_eq!(pipe.pipe_operators, vec![PipeOperator::Fd(2)]);
     } else {
         panic!("expected pipeline");
@@ -570,7 +570,7 @@ fn test_parse_multi_item_slices() {
     let p = parse("echo $l[1 3..5 2] (seq 10)[2..5 1..3]\n").unwrap();
     if let Statement::Pipeline(pipe) = &p.statements[0] {
         // $l[1 3..5 2]
-        if let WordPart::Variable(vref) = &pipe.commands[0].args[1].parts[0] {
+        if let WordPart::Variable(vref) = &pipe.commands()[0].args[1].parts[0] {
             assert_eq!(
                 vref.slices,
                 vec![
@@ -587,7 +587,7 @@ fn test_parse_multi_item_slices() {
         }
 
         // (seq 10)[2..5 1..3]
-        if let WordPart::CommandSubst { slices, .. } = &pipe.commands[0].args[2].parts[0] {
+        if let WordPart::CommandSubst { slices, .. } = &pipe.commands()[0].args[2].parts[0] {
             assert_eq!(
                 *slices,
                 vec![
@@ -611,19 +611,77 @@ fn test_parse_multi_item_slices() {
 fn test_parse_extended_redirect_modes() {
     let p = parse("echo a &>?out.txt &>>?append.txt 2>>&1\n").unwrap();
     if let Statement::Pipeline(pipe) = &p.statements[0] {
-        assert_eq!(pipe.commands[0].redirections.len(), 3);
+        assert_eq!(pipe.commands()[0].redirections.len(), 3);
         assert_eq!(
-            pipe.commands[0].redirections[0].mode,
+            pipe.commands()[0].redirections[0].mode,
             RedirectMode::NoClobberOutputAndErr
         );
         assert_eq!(
-            pipe.commands[0].redirections[1].mode,
+            pipe.commands()[0].redirections[1].mode,
             RedirectMode::NoClobberAppendAndErr
         );
         assert_eq!(
-            pipe.commands[0].redirections[2].mode,
+            pipe.commands()[0].redirections[2].mode,
             RedirectMode::DupOutput
         );
-        assert_eq!(pipe.commands[0].redirections[2].fd, Some(2));
+        assert_eq!(pipe.commands()[0].redirections[2].fd, Some(2));
+    }
+}
+
+#[test]
+fn test_parse_pipeline_negate() {
+    let p = parse("not true | false\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p.statements[0] {
+        assert!(pipe.negate);
+        assert_eq!(pipe.elements.len(), 2);
+    } else {
+        panic!("expected pipeline");
+    }
+}
+
+#[test]
+fn test_parse_variable_assignment_command() {
+    let p = parse("GIT_DIR=somerepo git status\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p.statements[0] {
+        let cmd = pipe.commands()[0];
+        assert_eq!(cmd.assignments.len(), 1);
+        assert_eq!(cmd.assignments[0].name, "GIT_DIR");
+        assert_eq!(
+            cmd.assignments[0].value.as_single_literal(),
+            Some("somerepo")
+        );
+        assert_eq!(cmd.args[0].as_single_literal(), Some("git"));
+        assert_eq!(cmd.args[1].as_single_literal(), Some("status"));
+    } else {
+        panic!("expected pipeline");
+    }
+}
+
+#[test]
+fn test_parse_block_in_pipeline() {
+    let p = parse("begin; echo a; echo b; end | grep a\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p.statements[0] {
+        assert_eq!(pipe.elements.len(), 2);
+        assert!(matches!(pipe.elements[0], PipelineElement::Block(_)));
+        assert!(matches!(pipe.elements[1], PipelineElement::Command(_)));
+    } else {
+        panic!("expected pipeline");
+    }
+}
+
+#[test]
+fn test_parse_background_context_sensitivity() {
+    let p1 = parse("echo foo &\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p1.statements[0] {
+        assert!(pipe.background);
+    } else {
+        panic!("expected pipeline");
+    }
+
+    let p2 = parse("echo foo&bar\n").unwrap();
+    if let Statement::Pipeline(pipe) = &p2.statements[0] {
+        assert!(!pipe.background);
+    } else {
+        panic!("expected pipeline");
     }
 }

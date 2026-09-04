@@ -402,3 +402,20 @@ set idx (contains -i green $colors)
     assert!(bash.contains("{\n"));
     assert!(bash.contains("}\n"));
 }
+
+#[test]
+fn test_transpile_pipeline_negate_and_assignments() {
+    let script = "not true | false\nGIT_DIR=somerepo git status\n";
+    let bash = transpile(script);
+    assert!(bash.contains("! true | false"));
+    assert!(bash.contains("GIT_DIR=somerepo git status"));
+}
+
+#[test]
+fn test_transpile_block_in_pipeline() {
+    let script = "begin; echo a; echo b; end | grep a\n";
+    let bash = transpile(script);
+    assert!(bash.contains("} | grep a"));
+    assert!(bash.contains("echo a"));
+    assert!(bash.contains("echo b"));
+}
