@@ -438,6 +438,134 @@ pub fn lower_command(c: &Command, scope: &Scope) -> LoweredCommand {
                 };
             }
         }
+        if cmd_name == "contains" {
+            let mut is_index = false;
+            let mut needle_opt: Option<&Word> = None;
+            let mut haystack: Vec<&Word> = Vec::new();
+            let mut stop_options = false;
+
+            for arg in c.args.iter().skip(1) {
+                if !stop_options {
+                    if let Some(lit) = arg.as_single_literal() {
+                        if lit == "--" {
+                            stop_options = true;
+                            continue;
+                        }
+                        if lit == "-i" || lit == "--index" {
+                            is_index = true;
+                            continue;
+                        }
+                        if lit == "-q" || lit == "--query" {
+                            continue;
+                        }
+                    }
+                }
+                if needle_opt.is_none() {
+                    needle_opt = Some(arg);
+                } else {
+                    haystack.push(arg);
+                }
+            }
+
+            if let Some(needle) = needle_opt {
+                let lowered_needle = if needle.parts.len() == 1 {
+                    if let WordPart::Literal(s) = &needle.parts[0] {
+                        LoweredWord::from_literal(format!("\"{}\"", s))
+                    } else {
+                        lower_word(needle, scope)
+                    }
+                } else {
+                    lower_word(needle, scope)
+                };
+
+                let mut lowered_haystack = Vec::new();
+                for h in haystack {
+                    if let Some(var) = extract_single_variable(h) {
+                        if var == "argv" {
+                            lowered_haystack.push(LoweredWord::from_literal("\"$@\""));
+                        } else {
+                            lowered_haystack.push(LoweredWord::from_literal(format!(
+                                "\"${{{}[@]}}\"",
+                                var
+                            )));
+                        }
+                    } else {
+                        lowered_haystack.push(lower_word(h, scope));
+                    }
+                }
+
+                let mut sub_args = Vec::new();
+                if is_index {
+                    sub_args.push(LoweredWord::from_literal("(__hook_i=1;"));
+                    sub_args.push(LoweredWord::from_literal("for"));
+                    sub_args.push(LoweredWord::from_literal("__hook_item"));
+                    sub_args.push(LoweredWord::from_literal("in"));
+                    for h in lowered_haystack {
+                        sub_args.push(h);
+                    }
+                    sub_args.push(LoweredWord::from_literal(";"));
+                    sub_args.push(LoweredWord::from_literal("do"));
+                    sub_args.push(LoweredWord::from_literal("["));
+                    sub_args.push(LoweredWord::from_literal("\"$__hook_item\""));
+                    sub_args.push(LoweredWord::from_literal("="));
+                    sub_args.push(lowered_needle);
+                    sub_args.push(LoweredWord::from_literal("]"));
+                    sub_args.push(LoweredWord::from_literal("&&"));
+                    sub_args.push(LoweredWord::from_literal("{"));
+                    sub_args.push(LoweredWord::from_literal("printf"));
+                    sub_args.push(LoweredWord::from_literal("'%s\\n'"));
+                    sub_args.push(LoweredWord::from_literal("\"$__hook_i\";"));
+                    sub_args.push(LoweredWord::from_literal("exit"));
+                    sub_args.push(LoweredWord::from_literal("0;"));
+                    sub_args.push(LoweredWord::from_literal("};"));
+                    sub_args.push(LoweredWord::from_literal("__hook_i=$((__hook_i"));
+                    sub_args.push(LoweredWord::from_literal("+"));
+                    sub_args.push(LoweredWord::from_literal("1));"));
+                    sub_args.push(LoweredWord::from_literal("done;"));
+                    sub_args.push(LoweredWord::from_literal("exit"));
+                    sub_args.push(LoweredWord::from_literal("1)"));
+                } else {
+                    sub_args.push(LoweredWord::from_literal("(for"));
+                    sub_args.push(LoweredWord::from_literal("__hook_item"));
+                    sub_args.push(LoweredWord::from_literal("in"));
+                    for h in lowered_haystack {
+                        sub_args.push(h);
+                    }
+                    sub_args.push(LoweredWord::from_literal(";"));
+                    sub_args.push(LoweredWord::from_literal("do"));
+                    sub_args.push(LoweredWord::from_literal("["));
+                    sub_args.push(LoweredWord::from_literal("\"$__hook_item\""));
+                    sub_args.push(LoweredWord::from_literal("="));
+                    sub_args.push(lowered_needle);
+                    sub_args.push(LoweredWord::from_literal("]"));
+                    sub_args.push(LoweredWord::from_literal("&&"));
+                    sub_args.push(LoweredWord::from_literal("exit"));
+                    sub_args.push(LoweredWord::from_literal("0;"));
+                    sub_args.push(LoweredWord::from_literal("done;"));
+                    sub_args.push(LoweredWord::from_literal("exit"));
+                    sub_args.push(LoweredWord::from_literal("1)"));
+                }
+
+                return LoweredCommand {
+                    negate: c.negate,
+                    args: sub_args,
+                    redirections: c
+                        .redirections
+                        .iter()
+                        .map(|r| lower_redirection(r, scope))
+                        .collect(),
+                };
+            } else {
+                return LoweredCommand {
+                    negate: c.negate,
+                    args: vec![
+                        LoweredWord::from_literal("(exit"),
+                        LoweredWord::from_literal("1)"),
+                    ],
+                    redirections: vec![],
+                };
+            }
+        }
         if cmd_name == "set" {
             let mut is_query = false;
             let mut query_var = None;

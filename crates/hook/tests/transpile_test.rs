@@ -344,3 +344,9 @@ fn test_transpile_count_builtin() {
     let bash_if = transpile("if count $foos >/dev/null\n  echo yes\nend\n");
     assert!(bash_if.contains("[ \"${#foos[@]}\" -gt 0 ]"));
 }
+
+#[test]
+fn test_transpile_contains_builtin() {
+    let bash = transpile("if contains blue $smurf\n  echo found\nend\n");
+    assert!(bash.contains("for __hook_item in"));
+}
