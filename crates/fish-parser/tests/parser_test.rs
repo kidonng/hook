@@ -233,7 +233,11 @@ fn test_parse_merged_pipes() {
         if let Statement::Pipeline(pipe) = &program.statements[0] {
             assert_eq!(pipe.commands.len(), 2);
             let cmd1 = &pipe.commands[0];
-            assert!(cmd1.redirections.iter().any(|r| r.fd == Some(2) && r.mode == RedirectMode::DupOutput));
+            assert!(
+                cmd1.redirections
+                    .iter()
+                    .any(|r| r.fd == Some(2) && r.mode == RedirectMode::DupOutput)
+            );
         } else {
             panic!("expected pipeline");
         }

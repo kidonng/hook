@@ -223,3 +223,36 @@ fn test_transpile_process_id_variables() {
     let bash_quoted = transpile("echo \"PID: $fish_pid, Background: $last_pid\"\n");
     assert_eq!(bash_quoted, "echo \"PID: $$, Background: $!\"\n");
 }
+
+#[test]
+fn test_phase1_alignment_combined() {
+    let script = r#"
+#!/usr/bin/env fish
+
+function run_pipeline --wraps make -d "Run build pipeline"
+    make &| tee build.log
+end
+
+function check_services -S
+    while read -r service
+        if test -n "$service"
+            echo "Service running: $service (PID: $fish_pid)"
+        end 2>/dev/null
+    end < services.txt
+end
+
+echo "(pwd)"
+echo "$(pwd)"
+echo "Background PID: $last_pid"
+"#;
+
+    let bash = transpile(script);
+    assert!(bash.starts_with("#!/usr/bin/env bash\n"));
+    assert!(bash.contains("make 2>&1 | tee build.log"));
+    assert!(bash.contains("while read -r service; do"));
+    assert!(bash.contains("done < services.txt"));
+    assert!(bash.contains("fi 2> /dev/null"));
+    assert!(bash.contains("echo \"(pwd)\""));
+    assert!(bash.contains("echo \"$(pwd)\""));
+    assert!(bash.contains("echo \"Background PID: $!\""));
+}
