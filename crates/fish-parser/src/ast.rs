@@ -21,9 +21,16 @@ pub enum Statement {
     Comment(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PipeOperator {
+    Stdout,
+    StdoutAndStderr,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pipeline {
     pub commands: Vec<Command>,
+    pub pipe_operators: Vec<PipeOperator>,
     pub combinator: Combinator,
     pub background: bool,
 }
@@ -156,9 +163,8 @@ pub struct WhileStatement {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionStatement {
-    pub name: String,
-    pub named_args: Vec<String>,
-    pub description: Option<String>,
+    pub name: Word,
+    pub options: Vec<Word>,
     pub body: Vec<Statement>,
 }
 

@@ -20,6 +20,7 @@ fn test_ast_serialization() {
                 ],
                 redirections: vec![],
             }],
+            pipe_operators: vec![],
             combinator: Combinator::None,
             background: false,
         })],

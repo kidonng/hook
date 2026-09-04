@@ -104,10 +104,12 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
         Statement::Function(f) => {
             let mut fn_scope = *scope;
             fn_scope.in_function = true;
+            let (named_args, description) = extract_function_meta(&f.options);
+            let func_name = f.name.as_single_literal().unwrap_or("").to_string();
             LoweredStatement::Function(LoweredFunction {
-                name: f.name.clone(),
-                named_args: f.named_args.clone(),
-                description: f.description.clone(),
+                name: func_name,
+                named_args,
+                description,
                 body: lower_statements(&f.body, &mut fn_scope),
             })
         }
@@ -188,8 +190,21 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
 }
 
 pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
+    let mut commands: Vec<LoweredCommand> =
+        p.commands.iter().map(|c| lower_command(c, scope)).collect();
+    for (idx, op) in p.pipe_operators.iter().enumerate() {
+        if *op == PipeOperator::StdoutAndStderr {
+            if let Some(cmd) = commands.get_mut(idx) {
+                cmd.redirections.push(LoweredRedirection {
+                    fd: Some(2),
+                    mode: RedirectMode::DupOutput,
+                    target: LoweredWord::from_literal("1"),
+                });
+            }
+        }
+    }
     LoweredPipeline {
-        commands: p.commands.iter().map(|c| lower_command(c, scope)).collect(),
+        commands,
         combinator: p.combinator,
         background: p.background,
     }
@@ -401,4 +416,75 @@ fn lower_variable_ref(v: &VariableRef) -> LoweredVariableRef {
         name: v.name.clone(),
         subscript,
     }
+}
+
+fn extract_function_meta(options: &[Word]) -> (Vec<String>, Option<String>) {
+    let mut named_args = Vec::new();
+    let mut description = None;
+
+    let mut i = 0;
+    while i < options.len() {
+        let opt = &options[i];
+        if let Some(lit) = opt.as_single_literal() {
+            match lit {
+                "-a" | "--argument-names" => {
+                    i += 1;
+                    while i < options.len() {
+                        let next = &options[i];
+                        if let Some(name) = next.as_single_literal() {
+                            if !name.starts_with('-') {
+                                named_args.push(name.to_string());
+                                i += 1;
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                    continue;
+                }
+                "-d" | "--description" => {
+                    i += 1;
+                    if i < options.len() {
+                        description = extract_word_string(&options[i]);
+                        i += 1;
+                    }
+                    continue;
+                }
+                "-w" | "--wraps" | "-V" | "--inherit-variable" | "-e" | "--on-event" | "-s"
+                | "--on-signal" | "-v" | "--on-variable" | "-j" | "--on-job-exit" => {
+                    i += 1;
+                    if i < options.len() {
+                        i += 1;
+                    }
+                    continue;
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    (named_args, description)
+}
+
+fn extract_word_string(w: &Word) -> Option<String> {
+    let mut s = String::new();
+    for p in &w.parts {
+        match p {
+            WordPart::Literal(lit) => s.push_str(lit),
+            WordPart::SingleQuoted(sq) => s.push_str(sq),
+            WordPart::DoubleQuoted(parts) => {
+                for dp in parts {
+                    if let WordPart::Literal(lit) = dp {
+                        s.push_str(lit);
+                    }
+                }
+            }
+            _ => return None,
+        }
+    }
+    Some(s)
 }

@@ -121,9 +121,12 @@ end
     let program = parse(input).expect("parsing failed");
     match &program.statements[0] {
         Statement::Function(f) => {
-            assert_eq!(f.name, "greet");
-            assert_eq!(f.named_args, vec!["name".to_string(), "title".to_string()]);
-            assert_eq!(f.description, Some("greets a person".to_string()));
+            assert_eq!(f.name.as_single_literal(), Some("greet"));
+            assert_eq!(f.options.len(), 5);
+            assert_eq!(f.options[0].as_single_literal(), Some("-a"));
+            assert_eq!(f.options[1].as_single_literal(), Some("name"));
+            assert_eq!(f.options[2].as_single_literal(), Some("title"));
+            assert_eq!(f.options[3].as_single_literal(), Some("-d"));
             assert_eq!(f.body.len(), 1);
         }
         _ => panic!("expected function statement"),
@@ -232,12 +235,7 @@ fn test_parse_merged_pipes() {
         assert_eq!(program.statements.len(), 1);
         if let Statement::Pipeline(pipe) = &program.statements[0] {
             assert_eq!(pipe.commands.len(), 2);
-            let cmd1 = &pipe.commands[0];
-            assert!(
-                cmd1.redirections
-                    .iter()
-                    .any(|r| r.fd == Some(2) && r.mode == RedirectMode::DupOutput)
-            );
+            assert_eq!(pipe.pipe_operators, vec![PipeOperator::StdoutAndStderr]);
         } else {
             panic!("expected pipeline");
         }
@@ -291,4 +289,11 @@ end
 "#;
     let program = parse(fish_code).unwrap();
     assert_eq!(program.statements.len(), 3);
+    if let Statement::Function(f) = &program.statements[0] {
+        assert_eq!(f.name.as_single_literal(), Some("my_git_wrap"));
+        assert_eq!(f.options.len(), 4);
+        assert_eq!(f.options[0].as_single_literal(), Some("--wraps"));
+    } else {
+        panic!("expected function");
+    }
 }

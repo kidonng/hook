@@ -6,13 +6,6 @@ enum CommandItem {
     Redir(Redirection),
 }
 
-#[derive(Debug)]
-enum FuncOpt {
-    Args(Vec<String>),
-    Desc(String),
-    Ignored,
-}
-
 peg::parser! {
     pub grammar fish_grammar() for str {
         pub rule program() -> Program
@@ -114,16 +107,13 @@ peg::parser! {
         rule pipeline() -> Pipeline
             = !reserved_keyword() comb:combinator_prefix()? _* negate:negate()? head:command() tail:(sep:pipe_sep() cmd:command() { (sep, cmd) })* bg:(_* "&" !['&' | '>'])? {
                 let mut commands = vec![head];
+                let mut pipe_operators = Vec::new();
                 for (is_merged, next_cmd) in tail {
-                    if is_merged {
-                        if let Some(prev) = commands.last_mut() {
-                            prev.redirections.push(Redirection {
-                                fd: Some(2),
-                                mode: RedirectMode::DupOutput,
-                                target: Word::from_literal("1"),
-                            });
-                        }
-                    }
+                    pipe_operators.push(if is_merged {
+                        PipeOperator::StdoutAndStderr
+                    } else {
+                        PipeOperator::Stdout
+                    });
                     commands.push(next_cmd);
                 }
                 if let Some(true) = negate.map(|_| true) {
@@ -133,6 +123,7 @@ peg::parser! {
                 }
                 Pipeline {
                     commands,
+                    pipe_operators,
                     combinator: comb.unwrap_or(Combinator::None),
                     background: bg.is_some(),
                 }
@@ -322,55 +313,15 @@ peg::parser! {
             }
 
         rule function_stmt() -> Statement
-            = "function" !keyword_char() _+ name:word() opts:func_opt()* statement_sep()
+            = "function" !keyword_char() _+ name:word() options:(_+ w:word() { w })* statement_sep()
               body:statement_list()
               "end" !keyword_char() {
-                let mut named_args = Vec::new();
-                let mut description = None;
-                for opt in opts {
-                    match opt {
-                        FuncOpt::Args(mut a) => named_args.append(&mut a),
-                        FuncOpt::Desc(d) => description = Some(d),
-                        FuncOpt::Ignored => {}
-                    }
-                }
-                let func_name = name.as_single_literal().unwrap_or("").to_string();
                 Statement::Function(FunctionStatement {
-                    name: func_name,
-                    named_args,
-                    description,
+                    name,
+                    options,
                     body,
                 })
             }
-
-        rule func_opt() -> FuncOpt
-            = _+ ("-a" / "--argument-names") _+ names:(ident() ++ (_+)) {
-                FuncOpt::Args(names)
-            }
-            / _+ ("-d" / "--description") _+ w:word() {
-                let desc = match &w.parts[0] {
-                    WordPart::SingleQuoted(s) => s.clone(),
-                    WordPart::DoubleQuoted(parts) => {
-                        let mut s = String::new();
-                        for p in parts {
-                            if let WordPart::Literal(lit) = p {
-                                s.push_str(lit);
-                            }
-                        }
-                        s
-                    }
-                    WordPart::Literal(s) => s.clone(),
-                    _ => "".to_string(),
-                };
-                FuncOpt::Desc(desc)
-            }
-            / _+ ("-w" / "--wraps") _+ word() { FuncOpt::Ignored }
-            / _+ ("-V" / "--inherit-variable") _+ ident() { FuncOpt::Ignored }
-            / _+ ("-e" / "--on-event") _+ ident() { FuncOpt::Ignored }
-            / _+ ("-s" / "--on-signal") _+ ident() { FuncOpt::Ignored }
-            / _+ ("-v" / "--on-variable") _+ ident() { FuncOpt::Ignored }
-            / _+ ("-j" / "--on-job-exit") _+ ident() { FuncOpt::Ignored }
-            / _+ ("-S" / "--no-scope-shadowing") { FuncOpt::Ignored }
         rule begin_stmt() -> Statement
             = comb:combinator_prefix()? _* "begin" !keyword_char() statement_sep()
               body:statement_list()
