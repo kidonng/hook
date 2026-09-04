@@ -6,8 +6,44 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SourceSpan {
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+impl SourceSpan {
+    pub fn new(start_line: usize, end_line: usize) -> Self {
+        Self {
+            start_line,
+            end_line,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Statement {
+pub struct Statement {
+    pub kind: StatementKind,
+    pub span: SourceSpan,
+}
+
+impl Statement {
+    pub fn new(kind: StatementKind, span: SourceSpan) -> Self {
+        Self { kind, span }
+    }
+}
+
+impl From<StatementKind> for Statement {
+    fn from(kind: StatementKind) -> Self {
+        Self {
+            kind,
+            span: SourceSpan::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum StatementKind {
     Pipeline(Pipeline),
     If(IfStatement),
     Switch(SwitchStatement),
@@ -20,7 +56,6 @@ pub enum Statement {
     Continue,
     Comment(String),
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PipeOperator {
     Stdout,

@@ -1,8 +1,10 @@
 pub mod ast;
 pub mod grammar;
+pub mod line_index;
 pub mod unescape;
 pub use ast::*;
 pub use grammar::parse;
+pub use line_index::LineIndex;
 pub use peg::error::ParseError;
 
 pub fn version() -> &'static str {

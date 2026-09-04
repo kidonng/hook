@@ -4,7 +4,7 @@ use fish_parser::ast::*;
 fn test_ast_serialization() {
     let program = Program {
         shebang: Some("#!/usr/bin/env fish".to_string()),
-        statements: vec![Statement::Pipeline(Pipeline {
+        statements: vec![Statement::from(StatementKind::Pipeline(Pipeline {
             negate: false,
             elements: vec![PipelineElement::Command(Command {
                 assignments: vec![],
@@ -24,7 +24,7 @@ fn test_ast_serialization() {
             pipe_operators: vec![],
             combinator: Combinator::None,
             background: false,
-        })],
+        }))],
     };
 
     let serialized = serde_json::to_string(&program).expect("serialization failed");

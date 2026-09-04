@@ -7,8 +7,8 @@ fn test_parse_shebang_and_simple_command() {
     let program = parse(input).expect("parsing failed");
     assert_eq!(program.shebang, Some("#!/usr/bin/env fish".to_string()));
     assert_eq!(program.statements.len(), 1);
-    match &program.statements[0] {
-        Statement::Pipeline(p) => {
+    match &program.statements[0].kind {
+        StatementKind::Pipeline(p) => {
             assert_eq!(p.commands().len(), 1);
             let cmd = &p.commands()[0];
             assert_eq!(cmd.args[0].as_single_literal(), Some("echo"));
@@ -25,8 +25,8 @@ fn test_parse_shebang_and_simple_command() {
 fn test_parse_variables_and_slices() {
     let input = "echo $status $argv[1] $var[1..3] $var[-1]\n";
     let program = parse(input).expect("parsing failed");
-    match &program.statements[0] {
-        Statement::Pipeline(p) => {
+    match &program.statements[0].kind {
+        StatementKind::Pipeline(p) => {
             let args = &p.commands()[0].args;
             assert_eq!(args.len(), 5);
             // $status
@@ -73,8 +73,8 @@ fn test_parse_variables_and_slices() {
 fn test_parse_command_substitution_and_psub() {
     let input = "diff (sort a | psub) (sort b | psub)\n";
     let program = parse(input).expect("parsing failed");
-    match &program.statements[0] {
-        Statement::Pipeline(p) => {
+    match &program.statements[0].kind {
+        StatementKind::Pipeline(p) => {
             let args = &p.commands()[0].args;
             assert_eq!(args.len(), 3);
             match &args[1].parts[0] {
@@ -101,8 +101,8 @@ end
 "#;
     let program = parse(input).expect("parsing failed");
     assert_eq!(program.statements.len(), 1);
-    match &program.statements[0] {
-        Statement::If(if_stmt) => {
+    match &program.statements[0].kind {
+        StatementKind::If(if_stmt) => {
             assert_eq!(if_stmt.then_body.len(), 1);
             assert_eq!(if_stmt.elif_branches.len(), 1);
             assert!(if_stmt.else_body.is_some());
@@ -119,8 +119,8 @@ function greet -a name title -d "greets a person"
 end
 "#;
     let program = parse(input).expect("parsing failed");
-    match &program.statements[0] {
-        Statement::Function(f) => {
+    match &program.statements[0].kind {
+        StatementKind::Function(f) => {
             assert_eq!(f.name.as_single_literal(), Some("greet"));
             assert_eq!(f.options.len(), 5);
             assert_eq!(f.options[0].as_single_literal(), Some("-a"));
@@ -143,8 +143,8 @@ echo $argv |
 "#;
     let program = parse(input).expect("parsing multiline pipe failed");
     assert_eq!(program.statements.len(), 1);
-    match &program.statements[0] {
-        Statement::Pipeline(p) => {
+    match &program.statements[0].kind {
+        StatementKind::Pipeline(p) => {
             assert_eq!(p.commands().len(), 3);
         }
         _ => panic!("expected pipeline"),
@@ -202,7 +202,7 @@ fn test_parse_double_quoted_command_substitution_rules() {
     // $(cmd) inside double quotes MUST parse as CommandSubst
     let p1 = parse("echo \"$(pwd)\"\n").unwrap();
     let stmt1 = &p1.statements[0];
-    if let Statement::Pipeline(pipe) = stmt1 {
+    if let StatementKind::Pipeline(pipe) = &stmt1.kind {
         let arg = &pipe.commands()[0].args[1];
         if let WordPart::DoubleQuoted(parts) = &arg.parts[0] {
             assert!(matches!(parts[0], WordPart::CommandSubst { .. }));
@@ -216,7 +216,7 @@ fn test_parse_double_quoted_command_substitution_rules() {
     // Bare (cmd) inside double quotes MUST NOT parse as CommandSubst
     let p2 = parse("echo \"(pwd)\"\n").unwrap();
     let stmt2 = &p2.statements[0];
-    if let Statement::Pipeline(pipe) = stmt2 {
+    if let StatementKind::Pipeline(pipe) = &stmt2.kind {
         let arg = &pipe.commands()[0].args[1];
         if let WordPart::DoubleQuoted(parts) = &arg.parts[0] {
             assert_eq!(parts[0], WordPart::Literal("(pwd)".to_string()));
@@ -233,7 +233,7 @@ fn test_parse_merged_pipes() {
     for input in &["make &| less\n", "make |& less\n"] {
         let program = parse(input).unwrap();
         assert_eq!(program.statements.len(), 1);
-        if let Statement::Pipeline(pipe) = &program.statements[0] {
+        if let StatementKind::Pipeline(pipe) = &program.statements[0].kind {
             assert_eq!(pipe.commands().len(), 2);
             assert_eq!(pipe.pipe_operators, vec![PipeOperator::StdoutAndStderr]);
         } else {
@@ -246,7 +246,7 @@ fn test_parse_merged_pipes() {
 fn test_parse_block_redirections() {
     let input_while = "while read -l line\n echo $line\n end < input.txt\n";
     let program_while = parse(input_while).unwrap();
-    if let Statement::While(w) = &program_while.statements[0] {
+    if let StatementKind::While(w) = &program_while.statements[0].kind {
         assert_eq!(w.redirections.len(), 1);
         assert_eq!(w.redirections[0].mode, RedirectMode::Input);
     } else {
@@ -255,7 +255,7 @@ fn test_parse_block_redirections() {
 
     let input_for = "for x in 1 2 3\n echo $x\n end > output.txt\n";
     let program_for = parse(input_for).unwrap();
-    if let Statement::For(f) = &program_for.statements[0] {
+    if let StatementKind::For(f) = &program_for.statements[0].kind {
         assert_eq!(f.redirections.len(), 1);
         assert_eq!(f.redirections[0].mode, RedirectMode::Output);
     } else {
@@ -264,7 +264,7 @@ fn test_parse_block_redirections() {
 
     let input_if = "if test -e file\n echo yes\n end 2>/dev/null\n";
     let program_if = parse(input_if).unwrap();
-    if let Statement::If(i) = &program_if.statements[0] {
+    if let StatementKind::If(i) = &program_if.statements[0].kind {
         assert_eq!(i.redirections.len(), 1);
         assert_eq!(i.redirections[0].fd, Some(2));
     } else {
@@ -289,7 +289,7 @@ end
 "#;
     let program = parse(fish_code).unwrap();
     assert_eq!(program.statements.len(), 3);
-    if let Statement::Function(f) = &program.statements[0] {
+    if let StatementKind::Function(f) = &program.statements[0].kind {
         assert_eq!(f.name.as_single_literal(), Some("my_git_wrap"));
         assert_eq!(f.options.len(), 4);
         assert_eq!(f.options[0].as_single_literal(), Some("--wraps"));
@@ -301,7 +301,7 @@ end
 #[test]
 fn test_parse_dynamic_variable_slice_index() {
     let program = parse("echo $letters[$index]\necho $letters[$start..$end]\n").unwrap();
-    if let Statement::Pipeline(p) = &program.statements[0] {
+    if let StatementKind::Pipeline(p) = &program.statements[0].kind {
         let arg = &p.commands()[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
             assert_eq!(v.name(), Some("letters"));
@@ -311,7 +311,7 @@ fn test_parse_dynamic_variable_slice_index() {
             panic!("expected variable");
         }
     }
-    if let Statement::Pipeline(p) = &program.statements[1] {
+    if let StatementKind::Pipeline(p) = &program.statements[1].kind {
         let arg = &p.commands()[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
             assert_eq!(v.name(), Some("letters"));
@@ -333,7 +333,7 @@ fn test_parse_dynamic_variable_slice_index() {
 fn test_parse_indirect_variable() {
     let program = parse("echo $$var\n").unwrap();
     assert_eq!(program.statements.len(), 1);
-    if let Statement::Pipeline(p) = &program.statements[0] {
+    if let StatementKind::Pipeline(p) = &program.statements[0].kind {
         let arg = &p.commands()[0].args[1];
         if let WordPart::Variable(v) = &arg.parts[0] {
             assert!(matches!(v.target, VariableTarget::Indirect(_)));
@@ -346,7 +346,7 @@ fn test_parse_indirect_variable() {
 #[test]
 fn test_parse_safe_and_noclobber_redirections() {
     let p1 = parse("cat <?input.txt\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p1.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p1.statements[0].kind {
         assert_eq!(
             pipe.commands()[0].redirections[0].mode,
             RedirectMode::SafeInput
@@ -354,7 +354,7 @@ fn test_parse_safe_and_noclobber_redirections() {
     }
 
     let p2 = parse("echo hello >?output.txt\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p2.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p2.statements[0].kind {
         assert_eq!(
             pipe.commands()[0].redirections[0].mode,
             RedirectMode::NoClobberOutput
@@ -362,7 +362,7 @@ fn test_parse_safe_and_noclobber_redirections() {
     }
 
     let p3 = parse("echo err 2>?err.txt\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p3.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p3.statements[0].kind {
         assert_eq!(pipe.commands()[0].redirections[0].fd, Some(2));
         assert_eq!(
             pipe.commands()[0].redirections[0].mode,
@@ -374,13 +374,13 @@ fn test_parse_safe_and_noclobber_redirections() {
 #[test]
 fn test_parse_compound_statement_block() {
     let p = parse("{ echo hello; and echo world; }\n").unwrap();
-    assert!(matches!(p.statements[0], Statement::BeginBlock(_)));
+    assert!(matches!(p.statements[0].kind, StatementKind::BeginBlock(_)));
 }
 
 #[test]
 fn test_parse_single_quoted_escapes() {
     let p = parse("echo 'a\\\\b' 'a\\'b'\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert_eq!(
             pipe.commands()[0].args[1].parts[0],
             WordPart::SingleQuoted("a\\b".to_string())
@@ -395,7 +395,7 @@ fn test_parse_single_quoted_escapes() {
 #[test]
 fn test_parse_double_quoted_escapes() {
     let p = parse("echo \"a\\nb\" \"a\\\"b\" \"a\\$b\" \"a\\\\b\"\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert_eq!(
             pipe.commands()[0].args[1].parts[0],
             WordPart::DoubleQuoted(vec![WordPart::Literal("a\\nb".to_string())])
@@ -418,7 +418,7 @@ fn test_parse_double_quoted_escapes() {
 #[test]
 fn test_parse_unquoted_escapes() {
     let p = parse("echo \\e \\a \\f \\v \\x41 \\u0041\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert_eq!(
             pipe.commands()[0].args[1].parts[0],
             WordPart::Literal("\x1b".to_string())
@@ -449,7 +449,7 @@ fn test_parse_unquoted_escapes() {
 #[test]
 fn test_parse_numeric_variables() {
     let p = parse("echo $1 $123\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert_eq!(
             pipe.commands()[0].args[1].parts[0],
             WordPart::Variable(VariableRef::new_named("1", vec![]))
@@ -464,7 +464,7 @@ fn test_parse_numeric_variables() {
 #[test]
 fn test_parse_brace_expansion_and_literal_braces() {
     let p = parse("echo HEAD@{2} foo-{} {a} {a,b} {/usr,}/bin {,,/usr} {$foo}dog\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         // HEAD@{2}
         assert_eq!(
             pipe.commands()[0].args[1].parts,
@@ -527,7 +527,7 @@ fn test_parse_brace_expansion_and_literal_braces() {
 #[test]
 fn test_parse_for_empty_values() {
     let p = parse("for x in; echo $x; end\n").unwrap();
-    if let Statement::For(for_stmt) = &p.statements[0] {
+    if let StatementKind::For(for_stmt) = &p.statements[0].kind {
         assert_eq!(for_stmt.variable, "x");
         assert!(for_stmt.values.is_empty());
     } else {
@@ -538,7 +538,7 @@ fn test_parse_for_empty_values() {
 #[test]
 fn test_parse_switch_redirections() {
     let p = parse("switch $x; case a; echo a; end >/dev/null 2>&1\n").unwrap();
-    if let Statement::Switch(sw) = &p.statements[0] {
+    if let StatementKind::Switch(sw) = &p.statements[0].kind {
         assert_eq!(sw.redirections.len(), 2);
         assert_eq!(sw.redirections[0].mode, RedirectMode::Output);
         assert_eq!(sw.redirections[1].mode, RedirectMode::DupOutput);
@@ -550,7 +550,7 @@ fn test_parse_switch_redirections() {
 #[test]
 fn test_parse_fd_pipe() {
     let p = parse("make fish 2>| less\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert_eq!(pipe.commands().len(), 2);
         assert_eq!(pipe.pipe_operators, vec![PipeOperator::Fd(2)]);
     } else {
@@ -558,7 +558,7 @@ fn test_parse_fd_pipe() {
     }
 
     let p2 = parse("cmd >| pager\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p2.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p2.statements[0].kind {
         assert_eq!(pipe.pipe_operators, vec![PipeOperator::Fd(1)]);
     } else {
         panic!("expected pipeline");
@@ -568,7 +568,7 @@ fn test_parse_fd_pipe() {
 #[test]
 fn test_parse_multi_item_slices() {
     let p = parse("echo $l[1 3..5 2] (seq 10)[2..5 1..3]\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         // $l[1 3..5 2]
         if let WordPart::Variable(vref) = &pipe.commands()[0].args[1].parts[0] {
             assert_eq!(
@@ -610,7 +610,7 @@ fn test_parse_multi_item_slices() {
 #[test]
 fn test_parse_extended_redirect_modes() {
     let p = parse("echo a &>?out.txt &>>?append.txt 2>>&1\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert_eq!(pipe.commands()[0].redirections.len(), 3);
         assert_eq!(
             pipe.commands()[0].redirections[0].mode,
@@ -631,7 +631,7 @@ fn test_parse_extended_redirect_modes() {
 #[test]
 fn test_parse_pipeline_negate() {
     let p = parse("not true | false\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert!(pipe.negate);
         assert_eq!(pipe.elements.len(), 2);
     } else {
@@ -642,7 +642,7 @@ fn test_parse_pipeline_negate() {
 #[test]
 fn test_parse_variable_assignment_command() {
     let p = parse("GIT_DIR=somerepo git status\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         let cmd = pipe.commands()[0];
         assert_eq!(cmd.assignments.len(), 1);
         assert_eq!(cmd.assignments[0].name, "GIT_DIR");
@@ -660,7 +660,7 @@ fn test_parse_variable_assignment_command() {
 #[test]
 fn test_parse_block_in_pipeline() {
     let p = parse("begin; echo a; echo b; end | grep a\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p.statements[0].kind {
         assert_eq!(pipe.elements.len(), 2);
         assert!(matches!(pipe.elements[0], PipelineElement::Block(_)));
         assert!(matches!(pipe.elements[1], PipelineElement::Command(_)));
@@ -672,16 +672,57 @@ fn test_parse_block_in_pipeline() {
 #[test]
 fn test_parse_background_context_sensitivity() {
     let p1 = parse("echo foo &\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p1.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p1.statements[0].kind {
         assert!(pipe.background);
     } else {
         panic!("expected pipeline");
     }
 
     let p2 = parse("echo foo&bar\n").unwrap();
-    if let Statement::Pipeline(pipe) = &p2.statements[0] {
+    if let StatementKind::Pipeline(pipe) = &p2.statements[0].kind {
         assert!(!pipe.background);
     } else {
         panic!("expected pipeline");
+    }
+}
+
+#[test]
+fn test_statement_spans_and_blank_lines() {
+    let input = r#"echo first
+
+echo second
+
+
+echo third
+"#;
+    let program = parse(input).expect("parse failed");
+    assert_eq!(program.statements.len(), 3);
+    assert_eq!(program.statements[0].span.start_line, 1);
+    assert_eq!(program.statements[0].span.end_line, 1);
+    assert_eq!(program.statements[1].span.start_line, 3);
+    assert_eq!(program.statements[1].span.end_line, 3);
+    assert_eq!(program.statements[2].span.start_line, 6);
+    assert_eq!(program.statements[2].span.end_line, 6);
+}
+
+#[test]
+fn test_function_and_nested_statement_spans() {
+    let input = r#"function my_fn
+    echo line3
+
+    echo line5
+end
+"#;
+    let program = parse(input).expect("parse failed");
+    assert_eq!(program.statements.len(), 1);
+    let fn_stmt = &program.statements[0];
+    assert_eq!(fn_stmt.span.start_line, 1);
+    assert_eq!(fn_stmt.span.end_line, 5);
+    if let StatementKind::Function(f) = &fn_stmt.kind {
+        assert_eq!(f.body.len(), 2);
+        assert_eq!(f.body[0].span.start_line, 2);
+        assert_eq!(f.body[1].span.start_line, 4);
+    } else {
+        panic!("expected function");
     }
 }
