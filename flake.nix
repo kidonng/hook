@@ -1,5 +1,5 @@
 {
-  description = "";
+  description = "hook: Fish shell to Bash 3.2 transpiler";
 
   inputs = {
     nixpkgs.url = "https://flakehub.com/f/DeterminateSystems/nixpkgs-weekly/0.1";
@@ -22,32 +22,18 @@
         pkgs.fish
         pkgs.rustc
       ];
-
-      mkTask = pkgs: name: text:
-        pkgs.writeShellApplication {
-          inherit name text;
-          runtimeInputs = devTools pkgs;
-        };
-
-      testRunner = pkgs:
-        mkTask pkgs "hook-test" ''
-        '';
-
-      e2eRunner = pkgs:
-        mkTask pkgs "hook-e2e" ''
-        '';
-      fmtRunner = pkgs:
-        mkTask pkgs "hook-fmt" ''
-        '';
     in
     {
-      packages = forAllSystems (pkgs: rec {
-        test = testRunner pkgs;
-        e2e = e2eRunner pkgs;
-        fmt = fmtRunner pkgs;
+      packages = forAllSystems (pkgs: {
+        default = pkgs.rustPlatform.buildRustPackage {
+          pname = "hook";
+          version = "0.1.0";
+          src = ./.;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+        };
       });
-
-      formatter = forAllSystems (pkgs: fmtRunner pkgs);
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {

@@ -1,0 +1,11 @@
+[package]
+name = "fish-parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+peg = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

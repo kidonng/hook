@@ -1,0 +1,18 @@
+[package]
+name = "hook"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "hook"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hook"
+path = "src/main.rs"
+
+[dependencies]
+fish-parser = { path = "../fish-parser" }
+
+[dev-dependencies]
+insta = { workspace = true }
