@@ -50,6 +50,22 @@ pub enum AssignmentIR {
     ArgvLast {
         value: LoweredWord,
     },
+    SliceAssign {
+        name: String,
+        index: SliceIndexIR,
+        value: LoweredWord,
+    },
+    SliceErase {
+        name: String,
+        index: SliceIndexIR,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SliceIndexIR {
+    ZeroBased(usize),
+    NegativeOffset(usize),
+    Dynamic(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -268,3 +268,24 @@ fn test_transpile_dynamic_variable_subscript() {
         "echo \"${letters[@]:$((start - 1)):$((end - start + 1))}\"\n"
     );
 }
+
+#[test]
+fn test_transpile_slice_assignment_and_erase() {
+    let bash_assign = transpile("set fruit[2] evil\n");
+    assert_eq!(bash_assign, "fruit[1]=\"evil\"\n");
+
+    let bash_erase = transpile("set -e fruit[1]\n");
+    assert_eq!(bash_erase, "unset 'fruit[0]'\n");
+
+    let bash_assign_neg = transpile("set fruit[-1] evil\n");
+    assert_eq!(bash_assign_neg, "fruit[$((${#fruit[@]}-1))]=\"evil\"\n");
+
+    let bash_erase_neg = transpile("set -e fruit[-1]\n");
+    assert_eq!(bash_erase_neg, "unset \"fruit[$((${#fruit[@]}-1))]\"\n");
+
+    let bash_assign_dyn = transpile("set fruit[$idx] evil\n");
+    assert_eq!(bash_assign_dyn, "fruit[$((idx - 1))]=\"evil\"\n");
+
+    let bash_erase_dyn = transpile("set -e fruit[$idx]\n");
+    assert_eq!(bash_erase_dyn, "unset \"fruit[$((idx - 1))]\"\n");
+}

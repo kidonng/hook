@@ -258,6 +258,32 @@ fn emit_assignment(assign: &AssignmentIR, out: &mut String) {
             emit_word_inner(value, out);
             out.push('\"');
         }
+        AssignmentIR::SliceAssign { name, index, value } => {
+            match index {
+                SliceIndexIR::ZeroBased(idx) => {
+                    out.push_str(&format!("{}[{}]=\"", name, idx));
+                }
+                SliceIndexIR::NegativeOffset(k) => {
+                    out.push_str(&format!("{}[$((${{#{}[@]}}-{}))]=\"", name, name, k));
+                }
+                SliceIndexIR::Dynamic(var_name) => {
+                    out.push_str(&format!("{}[$(({} - 1))]=\"", name, var_name));
+                }
+            }
+            emit_word_inner(value, out);
+            out.push('\"');
+        }
+        AssignmentIR::SliceErase { name, index } => match index {
+            SliceIndexIR::ZeroBased(idx) => {
+                out.push_str(&format!("unset '{}[{}]'", name, idx));
+            }
+            SliceIndexIR::NegativeOffset(k) => {
+                out.push_str(&format!("unset \"{}[$((${{#{}[@]}}-{}))]\"", name, name, k));
+            }
+            SliceIndexIR::Dynamic(var_name) => {
+                out.push_str(&format!("unset \"{}[$(({} - 1))]\"", name, var_name));
+            }
+        },
     }
 }
 

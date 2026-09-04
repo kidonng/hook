@@ -125,6 +125,54 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
     }
 }
 
+fn parse_slice_target(word: &Word) -> Option<(String, SliceIndexIR)> {
+    if let Some(lit) = word.as_single_literal() {
+        if lit.ends_with(']') {
+            if let Some((name, rest)) = lit.split_once('[') {
+                if let Some(idx_str) = rest.strip_suffix(']') {
+                    if let Some(stripped) = idx_str.strip_prefix('$') {
+                        return Some((
+                            name.to_string(),
+                            SliceIndexIR::Dynamic(stripped.to_string()),
+                        ));
+                    }
+                    if let Ok(num) = idx_str.parse::<isize>() {
+                        if num < 0 {
+                            return Some((
+                                name.to_string(),
+                                SliceIndexIR::NegativeOffset((-num) as usize),
+                            ));
+                        } else if num > 0 {
+                            return Some((
+                                name.to_string(),
+                                SliceIndexIR::ZeroBased((num - 1) as usize),
+                            ));
+                        } else {
+                            return Some((name.to_string(), SliceIndexIR::ZeroBased(0)));
+                        }
+                    }
+                }
+            }
+        }
+    } else if word.parts.len() == 3 {
+        if let WordPart::Literal(prefix) = &word.parts[0] {
+            if let Some(name) = prefix.strip_suffix('[') {
+                if let WordPart::Variable(vref) = &word.parts[1] {
+                    if let WordPart::Literal(suffix) = &word.parts[2] {
+                        if suffix == "]" {
+                            return Some((
+                                name.to_string(),
+                                SliceIndexIR::Dynamic(vref.name.clone()),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
     let mut is_local = false;
     let mut is_export = false;
@@ -132,12 +180,12 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
     let mut is_prepend = false;
     let mut is_erase = false;
 
-    let mut var_name = None;
+    let mut var_word = None;
     let mut values = Vec::new();
 
     for arg in cmd.args.iter().skip(1) {
         if let Some(lit) = arg.as_single_literal() {
-            if lit.starts_with('-') && var_name.is_none() {
+            if lit.starts_with('-') && var_word.is_none() {
                 match lit {
                     "-q" | "--query" => return None,
                     "-l" | "--local" => is_local = true,
@@ -152,16 +200,41 @@ fn lower_set_command(cmd: &Command, scope: &Scope) -> Option<AssignmentIR> {
                 continue;
             }
         }
-        if var_name.is_none() {
-            if let Some(lit) = arg.as_single_literal() {
-                var_name = Some(lit.to_string());
-            }
+        if var_word.is_none() {
+            var_word = Some(arg);
         } else {
             values.push(lower_word(arg, scope));
         }
     }
 
-    let name = var_name?;
+    let target = var_word?;
+
+    if let Some((name, slice_idx)) = parse_slice_target(target) {
+        if name == "argv" && slice_idx == SliceIndexIR::NegativeOffset(1) && !values.is_empty() {
+            return Some(AssignmentIR::ArgvLast {
+                value: values.remove(0),
+            });
+        }
+        if is_erase {
+            return Some(AssignmentIR::SliceErase {
+                name,
+                index: slice_idx,
+            });
+        } else {
+            let val = if !values.is_empty() {
+                values.remove(0)
+            } else {
+                LoweredWord::from_literal("")
+            };
+            return Some(AssignmentIR::SliceAssign {
+                name,
+                index: slice_idx,
+                value: val,
+            });
+        }
+    }
+
+    let name = target.as_single_literal()?.to_string();
 
     if name == "argv[-1]" && !values.is_empty() {
         return Some(AssignmentIR::ArgvLast {
