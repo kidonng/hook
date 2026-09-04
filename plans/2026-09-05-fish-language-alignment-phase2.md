@@ -30,7 +30,7 @@
 - `SliceIndex` gains `Variable(VariableRef)`.
 - `grammar.rs` parses variable references inside `slice_index`.
 
-- [ ] **Step 1: Write failing test in `parser_test.rs`**
+- [x] **Step 1: Write failing test in `parser_test.rs`**
 
 ```rust
 #[test]
@@ -49,12 +49,12 @@ fn test_parse_dynamic_variable_slice_index() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p fish-parser --test parser_test test_parse_dynamic_variable_slice_index`
 Expected: FAIL (SliceIndex::Variable does not exist).
 
-- [ ] **Step 3: Update `ast.rs` and `grammar.rs`**
+- [x] **Step 3: Update `ast.rs` and `grammar.rs`**
 
 In `crates/fish-parser/src/ast.rs`:
 ```rust
@@ -80,12 +80,12 @@ rule slice_index() -> SliceIndex
     }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p fish-parser --test parser_test test_parse_dynamic_variable_slice_index`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/fish-parser/src/ast.rs crates/fish-parser/src/grammar.rs crates/fish-parser/tests/parser_test.rs
@@ -107,7 +107,7 @@ git commit -m "feat(fish-parser): support dynamic variable references in slice i
 - `lower_variable_ref` maps `SliceIndex::Variable(v)` to `BashSubscript::DynamicVariable`.
 - `emit_variable_ref` emits `${var[$((idx - 1))]}` in Bash.
 
-- [ ] **Step 1: Write failing test in `transpile_test.rs`**
+- [x] **Step 1: Write failing test in `transpile_test.rs`**
 
 ```rust
 #[test]
@@ -117,12 +117,12 @@ fn test_transpile_dynamic_variable_subscript() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p hook --test transpile_test test_transpile_dynamic_variable_subscript`
 Expected: FAIL.
 
-- [ ] **Step 3: Update `ir.rs`, `lowering.rs`, and `emitter.rs`**
+- [x] **Step 3: Update `ir.rs`, `lowering.rs`, and `emitter.rs`**
 
 In `crates/hook/src/bash/ir.rs`:
 ```rust
@@ -148,12 +148,12 @@ Some(BashSubscript::DynamicVariable(var_name)) => {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p hook --test transpile_test test_transpile_dynamic_variable_subscript`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/hook/src/bash/ir.rs crates/hook/src/bash/lowering.rs crates/hook/src/bash/emitter.rs crates/hook/tests/transpile_test.rs
@@ -174,7 +174,7 @@ git commit -m "feat(hook): lower dynamic variable slice subscripts to Bash 3.2 0
 - `AssignmentIR` gains `SliceAssign { name: String, index: SliceIndexIR, value: LoweredWord }` and `SliceErase { name: String, index: SliceIndexIR }`.
 - `lower_set_command` detects `name[index]` syntax and translates 1-based Fish indices to Bash 0-based indexing.
 
-- [ ] **Step 1: Write failing tests in `transpile_test.rs`**
+- [x] **Step 1: Write failing tests in `transpile_test.rs`**
 
 ```rust
 #[test]
@@ -187,24 +187,24 @@ fn test_transpile_slice_assignment_and_erase() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p hook --test transpile_test test_transpile_slice_assignment_and_erase`
 Expected: FAIL (currently emits `fruit[2]="evil"` and `unset fruit[1]`).
 
-- [ ] **Step 3: Implement Slice Assignment in `lowering.rs` and `emitter.rs`**
+- [x] **Step 3: Implement Slice Assignment in `lowering.rs` and `emitter.rs`**
 
 Parse `var[i]` in `lower_set_command`:
 - Subtract 1 for positive literal index.
 - Convert negative literal index `-k` to `$((${#var[@]}-k))`.
 Emit appropriate Bash assignment or `unset`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p hook --test transpile_test test_transpile_slice_assignment_and_erase`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/hook/src/bash/ir.rs crates/hook/src/bash/lowering.rs crates/hook/src/bash/emitter.rs crates/hook/tests/transpile_test.rs
@@ -228,7 +228,7 @@ git commit -m "feat(hook): lower set slice assignments and deletions with 1-base
 - In AST: `VariableTarget::Named(String)` vs `VariableTarget::Indirect(Box<VariableRef>)`.
 - In `hook`: Lower scalar indirect variable references to `${!var}` in Bash 3.2.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```rust
 #[test]
@@ -241,22 +241,22 @@ fn test_parse_and_transpile_indirect_variable() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p fish-parser --test parser_test`
 Expected: FAIL.
 
-- [ ] **Step 3: Update `ast.rs`, `grammar.rs`, `lowering.rs`, and `emitter.rs`**
+- [x] **Step 3: Update `ast.rs`, `grammar.rs`, `lowering.rs`, and `emitter.rs`**
 
 Support recursive `$` in `grammar.rs`.
 Lower to `${!var}` in `lowering.rs` and `emitter.rs`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/fish-parser crates/hook
@@ -270,11 +270,11 @@ git commit -m "feat: support indirect variable dereferencing ($$var)"
 **Files:**
 - Test: `crates/hook/tests/transpile_test.rs`
 
-- [ ] **Step 1: Add comprehensive Phase 2 integration test**
+- [x] **Step 1: Add comprehensive Phase 2 integration test**
 
 Validate combined dynamic slicing, slice assignment, and indirect expansion.
 
-- [ ] **Step 2: Run fmt, clippy, and full tests**
+- [x] **Step 2: Run fmt, clippy, and full tests**
 
 ```bash
 nix develop --command cargo fmt --check
@@ -283,7 +283,7 @@ cargo test
 ```
 Expected: PASS with 0 warnings.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add crates/hook/tests/transpile_test.rs
