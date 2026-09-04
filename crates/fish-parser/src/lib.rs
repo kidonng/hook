@@ -1,4 +1,9 @@
 pub mod ast;
+pub mod grammar;
+
+pub use ast::*;
+pub use grammar::parse;
+pub use peg::error::ParseError;
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
