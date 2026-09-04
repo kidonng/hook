@@ -9,6 +9,16 @@
 - **`crates/fish-parser`**: A standalone library parsing Fish shell syntax into a strongly typed AST using `rust-peg` and `serde`. It has no Bash or execution dependencies.
 - **`crates/hook`**: The CLI binary and translation engine. It consumes the AST from `fish-parser`, lowers Fish idioms into Bash 3.2 compatible constructs, and emits Bash scripts.
 
+### Architectural Boundary & Separation of Concerns
+
+- **`fish-parser` is strictly a pure, high-fidelity syntax parser**:
+  - Its sole responsibility is parsing Fish syntax into a faithful, strongly typed AST.
+  - NEVER perform semantic lowering, desugaring, or command-line option interpretation inside `fish-parser` (e.g. do not parse or discard function flags like `-a`/`-d`/`-w` inside the parser; preserve options as raw `Vec<Word>`).
+  - NEVER inject synthetic AST nodes or target-specific workarounds (e.g. do not synthesize `2>&1` redirections into a command's AST when encountering `&|` pipes; represent `PipeOperator::StdoutAndStderr` explicitly in the AST).
+- **All semantic interpretation, option parsing, and target-specific lowering belong in `hook`**:
+  - Downstream consumers (such as `crates/hook`'s lowering phase) are solely responsible for inspecting AST options, desugaring constructs, and mapping Fish idioms to Bash 3.2+.
+  - Keep `fish-parser` reusable for any consumer (linters, formatters, transpilers) without baking in `hook`-specific assumptions.
+
 ## Development Environment
 
 ### Prerequisites
