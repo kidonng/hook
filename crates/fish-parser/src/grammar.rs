@@ -198,8 +198,8 @@ peg::parser! {
 
         rule double_quoted_part() -> WordPart
             = variable_ref()
-            / command_subst()
-            / s:$(( [^'\"' | '$' | '(' | '\\'] / ("\\" [_]) )+) {
+            / dollar_command_subst()
+            / s:$(( [^'\"' | '$' | '\\'] / ("\\" [_]) )+) {
                 WordPart::Literal(unescape(s))
             }
 
@@ -223,10 +223,13 @@ peg::parser! {
             = "-" n:$(['0'..='9']+) { SliceIndex::Neg(n.parse::<usize>().unwrap()) }
             / n:$(['0'..='9']+) { SliceIndex::Pos(n.parse::<usize>().unwrap()) }
 
-        rule command_subst() -> WordPart
+        rule dollar_command_subst() -> WordPart
             = "$(" _* stmts:statement_list() _* ")" slices:slice()* {
                 WordPart::CommandSubst { statements: stmts, slices }
             }
+
+        rule command_subst() -> WordPart
+            = dollar_command_subst()
             / "(" _* stmts:statement_list() _* ")" slices:slice()* {
                 WordPart::CommandSubst { statements: stmts, slices }
             }

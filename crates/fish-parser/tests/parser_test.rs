@@ -193,3 +193,34 @@ set --local roots \
     let program = parse(input).expect("parsing multiline args failed");
     assert_eq!(program.statements.len(), 1);
 }
+
+#[test]
+fn test_parse_double_quoted_command_substitution_rules() {
+    // $(cmd) inside double quotes MUST parse as CommandSubst
+    let p1 = parse("echo \"$(pwd)\"\n").unwrap();
+    let stmt1 = &p1.statements[0];
+    if let Statement::Pipeline(pipe) = stmt1 {
+        let arg = &pipe.commands[0].args[1];
+        if let WordPart::DoubleQuoted(parts) = &arg.parts[0] {
+            assert!(matches!(parts[0], WordPart::CommandSubst { .. }));
+        } else {
+            panic!("expected DoubleQuoted");
+        }
+    } else {
+        panic!("expected pipeline");
+    }
+
+    // Bare (cmd) inside double quotes MUST NOT parse as CommandSubst
+    let p2 = parse("echo \"(pwd)\"\n").unwrap();
+    let stmt2 = &p2.statements[0];
+    if let Statement::Pipeline(pipe) = stmt2 {
+        let arg = &pipe.commands[0].args[1];
+        if let WordPart::DoubleQuoted(parts) = &arg.parts[0] {
+            assert_eq!(parts[0], WordPart::Literal("(pwd)".to_string()));
+        } else {
+            panic!("expected DoubleQuoted");
+        }
+    } else {
+        panic!("expected pipeline");
+    }
+}

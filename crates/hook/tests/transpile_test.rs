@@ -180,3 +180,9 @@ set --local roots \
     assert!(result.contains("roots="));
     assert!(!result.contains("~/.nix-profile \n"));
 }
+
+#[test]
+fn test_transpile_double_quoted_parens_literal() {
+    let bash = transpile("echo \"(pwd)\"\necho \"$(pwd)\"\n");
+    assert_eq!(bash, "echo \"(pwd)\"\necho \"$(pwd)\"\n");
+}
