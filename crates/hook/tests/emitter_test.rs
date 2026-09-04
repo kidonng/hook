@@ -29,13 +29,42 @@ set -e UNWANTED
 }
 
 #[test]
-fn test_emit_array_negative_subscript_defense() {
+fn test_emit_array_negative_subscript_modern() {
     let input = "echo $var[-1] $var[1..3]\n";
     let lowered = lower_program(&parse(input).unwrap());
     let bash = emit_bash(&lowered);
-    // Defense against Bash 3.2 bad array subscript: must use dynamic length calculation
-    assert!(bash.contains(r#""${var[$((${#var[@]}-1))]}""#));
+    assert!(bash.contains(r#""${var[-1]}""#));
     assert!(bash.contains(r#""${var[@]:0:3}""#));
+}
+
+#[test]
+fn test_emitter_modern_pipes_and_redirects() {
+    let input = "cmd1 &| cmd2\ncmd &> output.log\ncmd &>> append.log\n";
+    let lowered = lower_program(&parse(input).unwrap());
+    let bash = emit_bash(&lowered);
+    assert!(bash.contains("cmd1 |& cmd2"));
+    assert!(bash.contains("cmd &> output.log"));
+    assert!(bash.contains("cmd &>> append.log"));
+}
+
+#[test]
+fn test_emitter_modern_global_declaration_in_function() {
+    let input = "function foo\n  set -g count 42\n  set -g items a b\nend\n";
+    let lowered = lower_program(&parse(input).unwrap());
+    let bash = emit_bash(&lowered);
+    assert!(bash.contains(r#"declare -g count="42""#));
+    assert!(bash.contains(r#"declare -ga items=("a" "b")"#));
+}
+
+#[test]
+fn test_emitter_modern_slice_assign_and_erase() {
+    let input = "set fruit[-1] evil\nset -e fruit[-1]\nset fruit[$idx] kiwi\nset -e fruit[$idx]\n";
+    let lowered = lower_program(&parse(input).unwrap());
+    let bash = emit_bash(&lowered);
+    assert!(bash.contains("fruit[-1]=\"evil\""));
+    assert!(bash.contains("unset 'fruit[-1]'"));
+    assert!(bash.contains("fruit[idx-1]=\"kiwi\""));
+    assert!(bash.contains("unset 'fruit[idx-1]'"));
 }
 
 #[test]

@@ -417,20 +417,15 @@ fn emit_redirection(r: &LoweredRedirection, out: &mut String) {
             out.push(' ');
         }
         RedirectMode::OutputAndErr => {
-            out.push('>');
-            out.push(' ');
+            out.push_str("&> ");
         }
         RedirectMode::AppendAndErr => {
-            out.push_str(">>");
-            out.push(' ');
+            out.push_str("&>> ");
         }
         RedirectMode::DupOutput => out.push_str(">&"),
         RedirectMode::DupInput => out.push_str("<&"),
     }
     emit_word(&r.target, out);
-    if r.mode == RedirectMode::OutputAndErr || r.mode == RedirectMode::AppendAndErr {
-        out.push_str(" 2>&1");
-    }
 }
 
 pub fn emit_word(w: &LoweredWord, out: &mut String) {
