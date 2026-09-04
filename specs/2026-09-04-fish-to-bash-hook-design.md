@@ -63,6 +63,7 @@ All AST nodes implement `Debug`, `Clone`, `PartialEq`, `Serialize`, and `Deseria
 ```rust
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Program {
+    pub shebang: Option<String>,
     pub statements: Vec<Statement>,
 }
 
@@ -238,25 +239,35 @@ pub enum AssignmentIR {
 }
 ```
 
-#### Bash Code Generation for `AssignmentIR`:
+#### Bash Code Generation for `AssignmentIR` & Scope Defense:
+Scope tracking (`in_function: bool`): In Bash 3.2, `local` is strictly prohibited outside functions (`local: can only be used in a function` causes runtime failure).
+`hook::bash::lowering` tracks whether emission is inside a function body.
+
 - Single scalar value:
-  - `Local`: `local var="value"`
+  - `Local`: `local var="value"` (when `in_function == true`); safely falls back to `var="value"` at top-level.
   - `Export`: `export var="value"`
   - `Global`: `var="value"`
 - Multiple values (Arrays):
-  - `Local`: `local -a var=("val1" "val2")`
-  - `Export`: `export var="val1"` (or serialized if array, noting Bash export restrictions)
+  - `Local`: `local -a var=("val1" "val2")` (when `in_function == true`); safely falls back to `var=("val1" "val2")` at top-level.
+  - `Export`: `export var="val1"` (or serialized array if supported)
   - `Global`: `var=("val1" "val2")`
 - `Append`: `var+=("val1" "val2")`
 - `Prepend`: `var=("val1" "val2" "${var[@]}")`
 - `Erase`: `unset var`
-
 ### 5.2 Process Substitution Lowering `(cmd | psub)`
 When a `WordPart::CommandSubst` contains a single pipeline whose terminal command is `psub` (e.g., `(sort file.txt | psub)` or `(cmd | psub -f)`):
 - The terminal `| psub` is stripped.
 - The construct is emitted as Bash process substitution: `<(sort file.txt)`.
 
-### 5.3 Built-in Variables & Arguments Lowering
+### 5.3 Command Substitution `(cmd)` and IFS Splitting Defense
+In Fish, `(cmd)` strictly splits list elements by newlines `\n`, never splitting on spaces or tabs. In Bash, unquoted `$(cmd)` undergoes word splitting against default `$IFS` (spaces, tabs, newlines), corrupting arguments containing whitespace.
+- **Default Emission Rule**: When `CommandSubst` appears as a command argument or expression, it is emitted quoted by default: `"$(cmd)"` to prevent unintended field splitting.
+- **Loop Context**: When occurring directly in an iterable collection expression (e.g. `for item in (cmd)`), it is emitted unquoted `$(cmd)` so loop iteration proceeds over command output words.
+
+### 5.4 Shebang Header Transformation
+When `Program.shebang` is present (e.g., `#!/usr/bin/env fish` or `#!/bin/fish`), the emitter converts it to `#!/usr/bin/env bash` as the first line of output. If no shebang was present in the input, no shebang is emitted.
+
+### 5.5 Built-in Variables & Arguments Lowering
 - **`$status`** $\to$ `$?`
 - **`$pipestatus`** $\to$ `"${PIPESTATUS[@]}"`
 - **`$argv` & Slicing**:
@@ -267,7 +278,7 @@ When a `WordPart::CommandSubst` contains a single pipeline whose terminal comman
   - `$argv[2..]` or `$argv[2..-1]` $\to$ `"${@:2}"`
   - `$argv[-1]` $\to$ `"${@: -1:1}"` (note leading space before `-1` to avoid `${var:-default}`)
 
-### 5.4 Bash 3.2 Array Indexing & Slicing Compatibility
+### 5.6 Bash 3.2 Array Indexing & Slicing Compatibility
 Fish uses 1-based indexing; Bash uses 0-based indexing.
 - **Positive Index**: `$var[1]` $\to$ `"${var[0]}"`, `$var[n]` $\to$ `"${var[n-1]}"`.
 - **Positive Range**: `$var[1..3]` $\to$ `"${var[@]:0:3}"` (`offset = start - 1`, `length = end - start + 1`).
@@ -275,9 +286,8 @@ Fish uses 1-based indexing; Bash uses 0-based indexing.
 - **Negative Index**:
   Because Bash 3.2 generates `bad array subscript` on negative array indices such as `${var[-1]}`, negative indices must be lowered using dynamic array length arithmetic:
   - `$var[-1]` $\to$ `"${var[$((${#var[@]}-1))]}"`
-  - Negative index `-k` $\to$ `"${var[$((${#var[@]}-k))]}"`
 
-### 5.5 Control Structures Lowering
+### 5.7 Control Structures Lowering
 - **`if`**:
   ```bash
   if <condition>; then
