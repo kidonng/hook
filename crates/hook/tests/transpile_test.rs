@@ -365,3 +365,40 @@ fn test_transpile_compound_statement_block() {
     let bash = transpile("{ echo hello; and echo world; }\n");
     assert!(bash.contains("{\n  echo hello && echo world\n}"));
 }
+
+#[test]
+fn test_phase3_alignment_combined() {
+    let script = r#"
+#!/usr/bin/env fish
+
+set colors red green blue yellow
+set total (count $colors)
+
+if count $colors >/dev/null
+    echo "has colors"
+end
+
+if contains blue $colors
+    echo "found blue"
+end
+
+set idx (contains -i green $colors)
+
+{
+    cat <?input.txt
+    echo "phase 3 complete" >?output.txt
+}
+"#;
+
+    let bash = transpile(script);
+    assert!(bash.starts_with("#!/usr/bin/env bash\n"));
+    assert!(bash.contains("colors=(\"red\" \"green\" \"blue\" \"yellow\")"));
+    assert!(bash.contains("total=\"$(printf '%s\\n' \"${#colors[@]}\")\""));
+    assert!(bash.contains("if [ \"${#colors[@]}\" -gt 0 ]; then"));
+    assert!(bash.contains("for __hook_item in \"${colors[@]}\""));
+    assert!(bash.contains("__hook_i=1; for __hook_item in \"${colors[@]}\""));
+    assert!(bash.contains("< \"$([ -r input.txt ] && echo input.txt || echo /dev/null)\""));
+    assert!(bash.contains("> output.txt"));
+    assert!(bash.contains("{\n"));
+    assert!(bash.contains("}\n"));
+}

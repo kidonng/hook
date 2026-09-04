@@ -306,7 +306,6 @@ fn extract_single_variable(word: &Word) -> Option<&str> {
     }
 }
 
-
 pub fn lower_command(c: &Command, scope: &Scope) -> LoweredCommand {
     if let Some(cmd_name) = c.args.first().and_then(|w| w.as_single_literal()) {
         if cmd_name == "count" {
@@ -484,10 +483,8 @@ pub fn lower_command(c: &Command, scope: &Scope) -> LoweredCommand {
                         if var == "argv" {
                             lowered_haystack.push(LoweredWord::from_literal("\"$@\""));
                         } else {
-                            lowered_haystack.push(LoweredWord::from_literal(format!(
-                                "\"${{{}[@]}}\"",
-                                var
-                            )));
+                            lowered_haystack
+                                .push(LoweredWord::from_literal(format!("\"${{{}[@]}}\"", var)));
                         }
                     } else {
                         lowered_haystack.push(lower_word(h, scope));
