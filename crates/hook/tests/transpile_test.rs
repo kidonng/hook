@@ -359,3 +359,9 @@ fn test_transpile_safe_and_noclobber_redirections() {
     let bash_noclobber = transpile("echo hello >?output.txt\n");
     assert!(bash_noclobber.contains("> output.txt"));
 }
+
+#[test]
+fn test_transpile_compound_statement_block() {
+    let bash = transpile("{ echo hello; and echo world; }\n");
+    assert!(bash.contains("{\n  echo hello && echo world\n}"));
+}

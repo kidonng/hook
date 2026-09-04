@@ -361,3 +361,9 @@ fn test_parse_safe_and_noclobber_redirections() {
         assert_eq!(pipe.commands[0].redirections[0].mode, RedirectMode::NoClobberOutput);
     }
 }
+
+#[test]
+fn test_parse_compound_statement_block() {
+    let p = parse("{ echo hello; and echo world; }\n").unwrap();
+    assert!(matches!(p.statements[0], Statement::BeginBlock(_)));
+}

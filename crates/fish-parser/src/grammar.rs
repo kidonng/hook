@@ -42,6 +42,7 @@ peg::parser! {
 
         rule block_terminator()
             = ("end" / "else" / "case") !keyword_char()
+            / "}"
         pub rule statement() -> Vec<Statement>
             = !block_terminator() s:inner_statement() { s }
 
@@ -56,6 +57,7 @@ peg::parser! {
             / s:while_stmt() { vec![s] }
             / s:function_stmt() { vec![s] }
             / s:begin_stmt() { vec![s] }
+            / s:compound_block_stmt() { vec![s] }
             / pipeline_stmt()
         rule comment() -> Statement
             = "#" s:$((!['\n'][_])*) {
@@ -344,6 +346,16 @@ peg::parser! {
             = comb:combinator_prefix()? _* "begin" !keyword_char() statement_sep()
               body:statement_list()
               "end" !keyword_char() redirs:(_* r:redirection() { r })* {
+                Statement::BeginBlock(BeginBlock {
+                    combinator: comb.unwrap_or(Combinator::None),
+                    body,
+                    redirections: redirs,
+                })
+            }
+        rule compound_block_stmt() -> Statement
+            = comb:combinator_prefix()? _* "{" (_* ['\n' | ';'])* _*
+              body:statement_list()
+              _* "}" redirs:(_* r:redirection() { r })* {
                 Statement::BeginBlock(BeginBlock {
                     combinator: comb.unwrap_or(Combinator::None),
                     body,
