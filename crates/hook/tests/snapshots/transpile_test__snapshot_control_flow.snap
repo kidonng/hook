@@ -9,6 +9,7 @@ elif test -d foo.txt; then
 else
   echo "unknown"
 fi
+
 case "$target" in
   prod|production)
     echo "deploying prod"
@@ -20,6 +21,7 @@ case "$target" in
     echo "default"
     ;;
 esac
+
 while test "$count" -gt 0; do
   echo "$count"
   count="0"

@@ -419,3 +419,39 @@ fn test_transpile_block_in_pipeline() {
     assert!(bash.contains("echo a"));
     assert!(bash.contains("echo b"));
 }
+
+#[test]
+fn test_preserve_blank_lines_top_level_and_collapsed() {
+    let input = r#"
+echo 1
+
+echo 2
+
+
+
+echo 3
+"#;
+    let output = transpile(input);
+    let expected = "echo 1\n\necho 2\n\necho 3\n";
+    assert_eq!(output.trim(), expected.trim());
+}
+
+#[test]
+fn test_preserve_blank_lines_inside_blocks_without_boundary_padding() {
+    let input = r#"
+function my_fn
+
+    echo start
+
+    echo end
+
+end
+"#;
+    let output = transpile(input);
+    let expected = r#"my_fn() {
+  echo start
+
+  echo end
+}"#;
+    assert_eq!(output.trim(), expected.trim());
+}

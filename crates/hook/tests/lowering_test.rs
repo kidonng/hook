@@ -146,7 +146,9 @@ fn test_lower_set_global_in_function() {
     let prog = parse(fish).unwrap();
     let lowered = lower_program(&prog);
     if let LoweredStatementKind::Function(f) = &lowered.statements[0].kind {
-        if let LoweredStatementKind::Assignment(AssignmentIR::Global { in_function, .. }) = &f.body[0].kind {
+        if let LoweredStatementKind::Assignment(AssignmentIR::Global { in_function, .. }) =
+            &f.body[0].kind
+        {
             assert!(in_function);
         } else {
             panic!("expected global assignment in function");
@@ -161,14 +163,16 @@ fn test_lower_slice_assign_and_erase_negative() {
     let fish = "set fruit[-1] evil\nset -e fruit[-2]\n";
     let prog = parse(fish).unwrap();
     let lowered = lower_program(&prog);
-    if let LoweredStatementKind::Assignment(AssignmentIR::SliceAssign { name, index, .. }) = &lowered.statements[0].kind
+    if let LoweredStatementKind::Assignment(AssignmentIR::SliceAssign { name, index, .. }) =
+        &lowered.statements[0].kind
     {
         assert_eq!(name, "fruit");
         assert_eq!(index, &SliceIndexIR::Negative(-1));
     } else {
         panic!("expected SliceAssign");
     }
-    if let LoweredStatementKind::Assignment(AssignmentIR::SliceErase { name, index }) = &lowered.statements[1].kind
+    if let LoweredStatementKind::Assignment(AssignmentIR::SliceErase { name, index }) =
+        &lowered.statements[1].kind
     {
         assert_eq!(name, "fruit");
         assert_eq!(index, &SliceIndexIR::Negative(-2));

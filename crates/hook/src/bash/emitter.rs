@@ -17,8 +17,26 @@ pub fn emit_bash(program: &LoweredProgram) -> String {
 }
 
 pub fn emit_statements(stmts: &[LoweredStatement], indent: usize, out: &mut String) {
+    let mut prev_end_line: Option<usize> = None;
+
     for stmt in stmts {
+        let is_combinator_continuation = match &stmt.kind {
+            LoweredStatementKind::Pipeline(p) => p.combinator != Combinator::None,
+            LoweredStatementKind::BeginBlock(b) => b.combinator != Combinator::None,
+            _ => false,
+        };
+
+        if !is_combinator_continuation {
+            if let Some(prev_end) = prev_end_line {
+                if stmt.span.start_line > prev_end + 1 && prev_end > 0 {
+                    out.push('\n');
+                }
+            }
+        }
         emit_statement(stmt, indent, out);
+        if stmt.span.end_line > 0 {
+            prev_end_line = Some(stmt.span.end_line);
+        }
     }
 }
 
