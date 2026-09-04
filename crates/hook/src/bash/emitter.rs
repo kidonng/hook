@@ -24,14 +24,14 @@ pub fn emit_statements(stmts: &[LoweredStatement], indent: usize, out: &mut Stri
 
 fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
     let pad = "  ".repeat(indent);
-    match stmt {
-        LoweredStatement::Comment(c) => {
+    match &stmt.kind {
+        LoweredStatementKind::Comment(c) => {
             out.push_str(&pad);
             out.push('#');
             out.push_str(c);
             out.push('\n');
         }
-        LoweredStatement::Return(w) => {
+        LoweredStatementKind::Return(w) => {
             out.push_str(&pad);
             out.push_str("return");
             if let Some(w) = w {
@@ -40,20 +40,20 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             }
             out.push('\n');
         }
-        LoweredStatement::Break => {
+        LoweredStatementKind::Break => {
             out.push_str(&pad);
             out.push_str("break\n");
         }
-        LoweredStatement::Continue => {
+        LoweredStatementKind::Continue => {
             out.push_str(&pad);
             out.push_str("continue\n");
         }
-        LoweredStatement::Assignment(assign) => {
+        LoweredStatementKind::Assignment(assign) => {
             out.push_str(&pad);
             emit_assignment(assign, out);
             out.push('\n');
         }
-        LoweredStatement::Pipeline(p) => {
+        LoweredStatementKind::Pipeline(p) => {
             if p.combinator != Combinator::None && out.ends_with('\n') {
                 out.pop();
                 match p.combinator {
@@ -72,7 +72,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
                 out.push('\n');
             }
         }
-        LoweredStatement::If(i) => {
+        LoweredStatementKind::If(i) => {
             out.push_str(&pad);
             out.push_str("if ");
             emit_pipeline_chain(&i.condition, out);
@@ -98,7 +98,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             }
             out.push('\n');
         }
-        LoweredStatement::Switch(s) => {
+        LoweredStatementKind::Switch(s) => {
             out.push_str(&pad);
             out.push_str("case ");
             emit_word(&s.value, out);
@@ -118,7 +118,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             out.push_str(&pad);
             out.push_str("esac\n");
         }
-        LoweredStatement::For(f) => {
+        LoweredStatementKind::For(f) => {
             out.push_str(&pad);
             out.push_str(&format!("for {} in ", f.variable));
             for (idx, val) in f.values.iter().enumerate() {
@@ -137,7 +137,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             }
             out.push('\n');
         }
-        LoweredStatement::While(w) => {
+        LoweredStatementKind::While(w) => {
             out.push_str(&pad);
             out.push_str("while ");
             emit_pipeline_chain(&w.condition, out);
@@ -151,7 +151,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             }
             out.push('\n');
         }
-        LoweredStatement::Function(f) => {
+        LoweredStatementKind::Function(f) => {
             out.push_str(&pad);
             out.push_str(&format!("{}() {{\n", f.name));
             for (idx, arg) in f.named_args.iter().enumerate() {
@@ -160,7 +160,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             let has_executable = !f.named_args.is_empty()
                 || f.body
                     .iter()
-                    .any(|s| !matches!(s, LoweredStatement::Comment(_)));
+                    .any(|s| !matches!(s.kind, LoweredStatementKind::Comment(_)));
             emit_statements(&f.body, indent + 1, out);
             if !has_executable {
                 out.push_str(&format!("{}  :\n", pad));
@@ -168,7 +168,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             out.push_str(&pad);
             out.push_str("}\n");
         }
-        LoweredStatement::BeginBlock(b) => {
+        LoweredStatementKind::BeginBlock(b) => {
             if b.combinator != Combinator::None && out.ends_with('\n') {
                 out.pop();
                 match b.combinator {
@@ -188,7 +188,7 @@ fn emit_statement(stmt: &LoweredStatement, indent: usize, out: &mut String) {
             let has_executable = b
                 .body
                 .iter()
-                .any(|s| !matches!(s, LoweredStatement::Comment(_)));
+                .any(|s| !matches!(s.kind, LoweredStatementKind::Comment(_)));
             emit_statements(&b.body, indent + 1, out);
             if !has_executable {
                 out.push_str(&format!("{}  :\n", pad));
@@ -349,8 +349,8 @@ fn emit_pipeline_elements(p: &LoweredPipeline, out: &mut String) {
         }
         match el {
             LoweredPipelineElement::Command(cmd) => emit_command(cmd, out),
-            LoweredPipelineElement::Block(stmt) => match stmt {
-                LoweredStatement::BeginBlock(b) => {
+            LoweredPipelineElement::Block(stmt) => match &stmt.kind {
+                LoweredStatementKind::BeginBlock(b) => {
                     out.push_str("{\n");
                     for s in &b.body {
                         emit_statement(s, 1, out);

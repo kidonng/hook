@@ -25,25 +25,30 @@ pub fn lower_statements(stmts: &[Statement], scope: &mut Scope) -> Vec<LoweredSt
 }
 
 pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement {
-    match stmt {
-        Statement::Comment(c) => LoweredStatement::Comment(c.clone()),
-        Statement::Return(w) => LoweredStatement::Return(w.as_ref().map(|w| lower_word(w, scope))),
-        Statement::Break => LoweredStatement::Break,
-        Statement::Continue => LoweredStatement::Continue,
-        Statement::Pipeline(p) => {
+    let kind = match &stmt.kind {
+        StatementKind::Comment(c) => LoweredStatementKind::Comment(c.clone()),
+        StatementKind::Return(w) => {
+            LoweredStatementKind::Return(w.as_ref().map(|w| lower_word(w, scope)))
+        }
+        StatementKind::Break => LoweredStatementKind::Break,
+        StatementKind::Continue => LoweredStatementKind::Continue,
+        StatementKind::Pipeline(p) => {
             // Check if this pipeline is a `set` assignment command
             if p.elements.len() == 1 {
                 if let PipelineElement::Command(cmd) = &p.elements[0] {
                     if let Some("set") = cmd.args.first().and_then(|w| w.as_single_literal()) {
                         if let Some(assign) = builtins::set::lower_set_assignment(cmd, scope) {
-                            return LoweredStatement::Assignment(assign);
+                            return LoweredStatement::new(
+                                LoweredStatementKind::Assignment(assign),
+                                stmt.span,
+                            );
                         }
                     }
                 }
             }
-            LoweredStatement::Pipeline(lower_pipeline(p, scope))
+            LoweredStatementKind::Pipeline(lower_pipeline(p, scope))
         }
-        Statement::If(i) => LoweredStatement::If(LoweredIf {
+        StatementKind::If(i) => LoweredStatementKind::If(LoweredIf {
             condition: i
                 .condition
                 .iter()
@@ -67,7 +72,7 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                 .map(|r| lower_redirection(r, scope))
                 .collect(),
         }),
-        Statement::Switch(s) => LoweredStatement::Switch(LoweredSwitch {
+        StatementKind::Switch(s) => LoweredStatementKind::Switch(LoweredSwitch {
             value: lower_word(&s.value, scope),
             cases: s
                 .cases
@@ -78,11 +83,11 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                 })
                 .collect(),
         }),
-        Statement::For(f) => {
+        StatementKind::For(f) => {
             let mut val_scope = *scope;
             val_scope.in_for_values = true;
             let values = f.values.iter().map(|w| lower_word(w, &val_scope)).collect();
-            LoweredStatement::For(LoweredFor {
+            LoweredStatementKind::For(LoweredFor {
                 variable: f.variable.clone(),
                 values,
                 body: lower_statements(&f.body, scope),
@@ -93,7 +98,7 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                     .collect(),
             })
         }
-        Statement::While(w) => LoweredStatement::While(LoweredWhile {
+        StatementKind::While(w) => LoweredStatementKind::While(LoweredWhile {
             condition: w
                 .condition
                 .iter()
@@ -106,19 +111,19 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                 .map(|r| lower_redirection(r, scope))
                 .collect(),
         }),
-        Statement::Function(f) => {
+        StatementKind::Function(f) => {
             let mut fn_scope = *scope;
             fn_scope.in_function = true;
             let (named_args, description) = extract_function_meta(&f.options);
             let func_name = f.name.as_single_literal().unwrap_or("").to_string();
-            LoweredStatement::Function(LoweredFunction {
+            LoweredStatementKind::Function(LoweredFunction {
                 name: func_name,
                 named_args,
                 description,
                 body: lower_statements(&f.body, &mut fn_scope),
             })
         }
-        Statement::BeginBlock(b) => LoweredStatement::BeginBlock(LoweredBeginBlock {
+        StatementKind::BeginBlock(b) => LoweredStatementKind::BeginBlock(LoweredBeginBlock {
             combinator: b.combinator,
             body: lower_statements(&b.body, scope),
             redirections: b
@@ -127,7 +132,8 @@ pub fn lower_statement(stmt: &Statement, scope: &mut Scope) -> LoweredStatement 
                 .map(|r| lower_redirection(r, scope))
                 .collect(),
         }),
-    }
+    };
+    LoweredStatement::new(kind, stmt.span)
 }
 
 pub fn lower_pipeline(p: &Pipeline, scope: &Scope) -> LoweredPipeline {
@@ -210,7 +216,7 @@ pub fn lower_word_part(part: &WordPart, scope: &Scope) -> LoweredWordPart {
         WordPart::CommandSubst { statements, slices } => {
             // Check for process substitution: single pipeline ending in `psub` and no slices
             if slices.is_empty() && statements.len() == 1 {
-                if let Statement::Pipeline(p) = &statements[0] {
+                if let StatementKind::Pipeline(p) = &statements[0].kind {
                     if let Some(PipelineElement::Command(last_cmd)) = p.elements.last() {
                         if let Some("psub") =
                             last_cmd.args.first().and_then(|w| w.as_single_literal())

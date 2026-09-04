@@ -1,4 +1,4 @@
-use fish_parser::ast::{Combinator, RedirectMode, Slice};
+use fish_parser::ast::{Combinator, RedirectMode, Slice, SourceSpan};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweredProgram {
@@ -7,7 +7,28 @@ pub struct LoweredProgram {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum LoweredStatement {
+pub struct LoweredStatement {
+    pub kind: LoweredStatementKind,
+    pub span: SourceSpan,
+}
+
+impl LoweredStatement {
+    pub fn new(kind: LoweredStatementKind, span: SourceSpan) -> Self {
+        Self { kind, span }
+    }
+}
+
+impl From<LoweredStatementKind> for LoweredStatement {
+    fn from(kind: LoweredStatementKind) -> Self {
+        Self {
+            kind,
+            span: SourceSpan::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoweredStatementKind {
     Pipeline(LoweredPipeline),
     Assignment(AssignmentIR),
     If(LoweredIf),

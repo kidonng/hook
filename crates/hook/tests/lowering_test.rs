@@ -8,8 +8,8 @@ fn test_lower_set_scope_defense() {
     let input = "set -l foo 'bar'\n";
     let prog = parse(input).unwrap();
     let lowered = lower_program(&prog);
-    match &lowered.statements[0] {
-        LoweredStatement::Assignment(AssignmentIR::Global { name, values, .. }) => {
+    match &lowered.statements[0].kind {
+        LoweredStatementKind::Assignment(AssignmentIR::Global { name, values, .. }) => {
             assert_eq!(name, "foo");
             assert_eq!(values.len(), 1);
         }
@@ -23,9 +23,9 @@ fn test_lower_set_in_function() {
     let input = "function test_fn\nset -l foo 'bar'\nend\n";
     let prog = parse(input).unwrap();
     let lowered = lower_program(&prog);
-    match &lowered.statements[0] {
-        LoweredStatement::Function(f) => match &f.body[0] {
-            LoweredStatement::Assignment(AssignmentIR::Local { name, .. }) => {
+    match &lowered.statements[0].kind {
+        LoweredStatementKind::Function(f) => match &f.body[0].kind {
+            LoweredStatementKind::Assignment(AssignmentIR::Local { name, .. }) => {
                 assert_eq!(name, "foo");
             }
             _ => panic!("expected Local assignment inside function"),
@@ -39,8 +39,8 @@ fn test_lower_psub_detection() {
     let input = "diff (sort file1 | psub) (sort file2 | psub)\n";
     let prog = parse(input).unwrap();
     let lowered = lower_program(&prog);
-    match &lowered.statements[0] {
-        LoweredStatement::Pipeline(p) => {
+    match &lowered.statements[0].kind {
+        LoweredStatementKind::Pipeline(p) => {
             let cmds = p.commands();
             let arg1 = &cmds[0].args[1];
             match &arg1.parts[0] {
@@ -60,8 +60,8 @@ fn test_lower_builtin_vars_and_slices() {
     let input = "echo $status $pipestatus $argv $argv[1] $argv[2..-1] $argv[-1] $var[-1]\n";
     let prog = parse(input).unwrap();
     let lowered = lower_program(&prog);
-    match &lowered.statements[0] {
-        LoweredStatement::Pipeline(p) => {
+    match &lowered.statements[0].kind {
+        LoweredStatementKind::Pipeline(p) => {
             let cmds = p.commands();
             let args = &cmds[0].args;
             assert_eq!(args.len(), 8);
@@ -110,7 +110,7 @@ fn test_lower_merged_pipe_modern() {
     let prog = parse(fish).unwrap();
     let lowered = lower_program(&prog);
     let stmt = &lowered.statements[0];
-    if let LoweredStatement::Pipeline(p) = stmt {
+    if let LoweredStatementKind::Pipeline(p) = &stmt.kind {
         assert_eq!(p.pipe_operators, vec![PipeKind::StdoutAndStderr]);
         assert!(
             p.commands()[0].redirections.is_empty(),
@@ -126,7 +126,7 @@ fn test_lower_negative_slice_modern() {
     let fish = "echo $arr[-1]\n";
     let prog = parse(fish).unwrap();
     let lowered = lower_program(&prog);
-    if let LoweredStatement::Pipeline(p) = &lowered.statements[0] {
+    if let LoweredStatementKind::Pipeline(p) = &lowered.statements[0].kind {
         let arg = &p.commands()[0].args[1];
         if let LoweredWordPart::Variable(LoweredVariableRef::Custom { subscript, .. }) =
             &arg.parts[0]
@@ -145,8 +145,8 @@ fn test_lower_set_global_in_function() {
     let fish = "function foo\n  set -g bar 1\nend\n";
     let prog = parse(fish).unwrap();
     let lowered = lower_program(&prog);
-    if let LoweredStatement::Function(f) = &lowered.statements[0] {
-        if let LoweredStatement::Assignment(AssignmentIR::Global { in_function, .. }) = &f.body[0] {
+    if let LoweredStatementKind::Function(f) = &lowered.statements[0].kind {
+        if let LoweredStatementKind::Assignment(AssignmentIR::Global { in_function, .. }) = &f.body[0].kind {
             assert!(in_function);
         } else {
             panic!("expected global assignment in function");
@@ -161,20 +161,28 @@ fn test_lower_slice_assign_and_erase_negative() {
     let fish = "set fruit[-1] evil\nset -e fruit[-2]\n";
     let prog = parse(fish).unwrap();
     let lowered = lower_program(&prog);
-    if let LoweredStatement::Assignment(AssignmentIR::SliceAssign { name, index, .. }) =
-        &lowered.statements[0]
+    if let LoweredStatementKind::Assignment(AssignmentIR::SliceAssign { name, index, .. }) = &lowered.statements[0].kind
     {
         assert_eq!(name, "fruit");
         assert_eq!(index, &SliceIndexIR::Negative(-1));
     } else {
         panic!("expected SliceAssign");
     }
-    if let LoweredStatement::Assignment(AssignmentIR::SliceErase { name, index }) =
-        &lowered.statements[1]
+    if let LoweredStatementKind::Assignment(AssignmentIR::SliceErase { name, index }) = &lowered.statements[1].kind
     {
         assert_eq!(name, "fruit");
         assert_eq!(index, &SliceIndexIR::Negative(-2));
     } else {
         panic!("expected SliceErase");
     }
+}
+
+#[test]
+fn test_lowering_preserves_statement_spans() {
+    let input = "set -l foo bar\n\necho $foo\n";
+    let prog = fish_parser::parse(input).unwrap();
+    let lowered = lower_program(&prog);
+    assert_eq!(lowered.statements.len(), 2);
+    assert_eq!(lowered.statements[0].span.start_line, 1);
+    assert_eq!(lowered.statements[1].span.start_line, 3);
 }
