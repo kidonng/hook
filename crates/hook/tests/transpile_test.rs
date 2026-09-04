@@ -295,3 +295,42 @@ fn test_transpile_indirect_variable() {
     let bash = transpile("set var name\necho $$var\n");
     assert!(bash.contains("${!var}"));
 }
+
+#[test]
+fn test_phase2_alignment_combined() {
+    let script = r#"
+#!/usr/bin/env fish
+
+set fruits apple banana cherry date
+set idx 2
+echo $fruits[$idx]
+
+set start 1
+set end 3
+echo $fruits[$start..$end]
+
+set fruits[1] apricot
+set fruits[-1] elderberry
+set fruits[$idx] blueberry
+
+set -e fruits[1]
+set -e fruits[-1]
+set -e fruits[$idx]
+
+set var fruits
+echo $$var
+"#;
+
+    let bash = transpile(script);
+    assert!(bash.starts_with("#!/usr/bin/env bash\n"));
+    assert!(bash.contains("fruits=(\"apple\" \"banana\" \"cherry\" \"date\")"));
+    assert!(bash.contains("echo \"${fruits[$((idx - 1))]}\""));
+    assert!(bash.contains("echo \"${fruits[@]:$((start - 1)):$((end - start + 1))}\""));
+    assert!(bash.contains("fruits[0]=\"apricot\""));
+    assert!(bash.contains("fruits[$((${#fruits[@]}-1))]=\"elderberry\""));
+    assert!(bash.contains("fruits[$((idx - 1))]=\"blueberry\""));
+    assert!(bash.contains("unset 'fruits[0]'"));
+    assert!(bash.contains("unset \"fruits[$((${#fruits[@]}-1))]\""));
+    assert!(bash.contains("unset \"fruits[$((idx - 1))]\""));
+    assert!(bash.contains("echo \"${!var}\""));
+}
