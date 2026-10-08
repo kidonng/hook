@@ -8,6 +8,7 @@
 
 - **`crates/fish-parser`**: A standalone library parsing Fish shell syntax into a strongly typed AST using `rust-peg` and `serde`. It has no Bash or execution dependencies.
 - **`crates/hook`**: The CLI binary and translation engine. It consumes the AST from `fish-parser`, lowers Fish idioms into modern Bash (5.0+) constructs (and future target backends), and emits Bash scripts.
+- `references/fish-shell`: fish shell source
 
 ### Architectural Boundary & Separation of Concerns
 
