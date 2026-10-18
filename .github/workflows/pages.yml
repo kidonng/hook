@@ -34,7 +34,11 @@ jobs:
 
       - name: Build WASM
         run: |
-          nix develop --command cargo build --target wasm32-wasip1 --release
+          nix shell --inputs-from . \
+            nixpkgs#pkgsCross.wasi32.buildPackages.cargo \
+            nixpkgs#pkgsCross.wasi32.buildPackages.rustc \
+            nixpkgs#lld \
+            --command cargo build --target wasm32-wasip1 --release
           cp target/wasm32-wasip1/release/hook.wasm live/hook.wasm
 
       - name: Upload Pages artifact
