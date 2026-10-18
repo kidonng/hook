@@ -8,7 +8,8 @@ Hook is a [fish](https://fishshell.com/) parser and transpiler.
 Hook can translate fish scripts to clean, idiomatic [Bash](https://www.gnu.org/software/bash/) scripts, allowing them to run (almost) anywhere.
 
 > [!NOTE]
-> Want the reverse (Bash → fish)? Checkout [Bait](https://github.com/kidonng/bait)!
+> - [Try the live demo!](https://kidonng.github.io/hook/)
+> - Want the reverse (Bash → fish)? Checkout [Bait](https://github.com/kidonng/bait)!
 
 ## Install
 
