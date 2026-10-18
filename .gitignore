@@ -2,3 +2,6 @@ references/
 target/
 result
 .direnv
+
+# Generated WASM binary for live page:
+/live/hook.wasm

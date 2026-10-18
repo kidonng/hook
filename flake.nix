@@ -18,10 +18,11 @@
 
       devTools = pkgs: [
         pkgs.bash
-        pkgs.cargo
+        pkgs.pkgsCross.wasi32.buildPackages.cargo
         pkgs.clippy
         pkgs.fish
-        pkgs.rustc
+        pkgs.lld
+        pkgs.pkgsCross.wasi32.buildPackages.rustc
         pkgs.rustfmt
       ];
     in
@@ -38,8 +39,11 @@
       });
 
       devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShellNoCC {
+        default = pkgs.mkShell {
           packages = devTools pkgs;
+          shellHook = ''
+            unset DEVELOPER_DIR SDKROOT
+          '';
         };
       });
     };
